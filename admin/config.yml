@@ -1,0 +1,31 @@
+backend:
+  name: git-gateway
+  branch: main # Specify your default GitHub branch (e.g., main or master)
+
+# Media file routing configuration
+media_folder: "Image/uploads" 
+public_folder: "Image/uploads" 
+
+# Data collections definition (Changed to Single JSON File output)
+collections:
+  - name: "portfolio_data"
+    label: "Portfolio Works"
+    files:
+      - label: "All Projects"
+        name: "projects"
+        file: "data/portfolio.json" # JS can easily read this single file
+        fields:
+          - label: "Works List"
+            name: "works"
+            widget: "list"
+            fields:
+              - {label: "Project Title (EN)", name: "title", widget: "string"}
+              - {label: "项目标题 (中文)", name: "title_zh", widget: "string", required: false}
+              - {label: "Category", name: "category", widget: "select", options: ["uiux", "photo", "manipulation", "video", "3d", "graphic"]}
+              - {label: "Thumbnail Image", name: "thumbnail", widget: "image"}
+              - {label: "Description (EN)", name: "description", widget: "text"}
+              - {label: "项目描述 (中文)", name: "description_zh", widget: "text", required: false}
+              - {label: "Tools Used", name: "tools", widget: "string"}
+              - {label: "Year", name: "year", widget: "string"}
+              - {label: "Client / Project Type (EN)", name: "client", widget: "string"}
+              - {label: "客户/项目类型 (中文)", name: "client_zh", widget: "string", required: false}

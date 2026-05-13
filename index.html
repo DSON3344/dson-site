@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DSON | Multimedia Design Portfolio</title>
+  
+  <!-- Added Favicon -->
+  <link rel="icon" type="image/png" href="Image/DSON logo.png">
+  
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=Inter:wght@300;400;500;600&family=Noto+Sans+SC:wght@300;400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+  
+  <!-- 1. 引入 AOS 动画库的 CSS -->
+  <link href="https://unpkg.com/aos@2.3.1/dist/aos.css" rel="stylesheet">
+  <link rel="stylesheet" href="DSON.css">
+
+  <script src="https://identity.netlify.com/v1/netlify-identity-widget.js"></script>
+</head>
+<body>
+
+<nav id="main-nav">
+  <a href="index.html" class="nav-logo">
+    <img src="Image/Logo_Colour.png" alt="DSON Logo" style="height: 36px; width: auto;">
+  </a>
+  <ul class="nav-links">
+    <li><a href="index.html" class="active"><span class="lang-en">Home</span><span class="lang-zh">首页</span></a></li>
+    <li><a href="portfolio.html"><span class="lang-en">Portfolio</span><span class="lang-zh">作品集</span></a></li>
+    <li><a href="socialmedia.html"><span class="lang-en">Social</span><span class="lang-zh">社交媒体</span></a></li>
+    <li><a href="contact.html"><span class="lang-en">Contact</span><span class="lang-zh">联系我</span></a></li>
+  </ul>
+  <div class="lang-switcher">
+    <a href="#" data-lang-select="en">ENG</a>
+    <a href="#" data-lang-select="zh">中文</a>
+  </div>
+</nav>
+
+<main>
+  <!-- Hero Section: 使用淡入效果 -->
+  <section class="hero" data-aos="fade-in">
+    <div class="hero-text" data-aos="fade-right" data-aos-delay="200">
+      <span class="hero-eyebrow">
+        <span class="lang-en">Creative Digital Arts</span><span class="lang-zh">创意数字艺术</span>
+      </span>
+      <h1>
+        <span class="lang-en">Crafting<br><em>Digital</em><br>Experiences</span>
+        <span class="lang-zh">打造<br><em>卓越的</em><br>数字体验</span>
+      </h1>
+      <p class="hero-desc">
+        <span class="lang-en">Hi! I’m <strong>Chang Dick Shen</strong>, but you can call me <strong>DSON</strong>. I'm an Integrated Multimedia Designer with a deep passion for video production, UI/UX design, web development, and 3D animation.</span>
+        <span class="lang-zh">你好！我是<strong>郑迪绅</strong>，你也可以叫我 <strong>DSON</strong>。我是一名综合多媒体设计师，对视频制作、UI/UX 设计、网页开发和 3D 动画充满热情。</span> 
+      </p>
+      <div class="btn-group">
+        <a href="portfolio.html" class="btn-primary"><span class="lang-en">View Portfolio</span><span class="lang-zh">浏览作品集</span></a>
+        <a href="socialmedia.html" class="btn-outline"><span class="lang-en">Follow My Journey</span><span class="lang-zh">关注我的旅程</span></a>
+      </div>
+    </div>
+    
+    <div class="hero-visual" data-aos="fade-left" data-aos-delay="400">
+      <div class="hero-grid-bg"></div>
+      <div class="hero-img-frame">
+        <img src="Image/ChangDickShen_Portrait.png" alt="DSON Profile Image">
+      </div>
+      <!-- 浮动标签使用缩放效果 -->
+      <div class="float-badge top-left" data-aos="zoom-in" data-aos-delay="600"><span class="dot"></span><span class="lang-en">UI/UX Designer</span><span class="lang-zh">UI/UX 设计师</span></div>
+      <div class="float-badge top-right" data-aos="zoom-in" data-aos-delay="700"><span class="dot"></span><span class="lang-en">Video Creator</span><span class="lang-zh">视频创作者</span></div>
+      <div class="float-badge bottom-left" data-aos="zoom-in" data-aos-delay="800"><span class="dot"></span><span class="lang-en">Content Creator</span><span class="lang-zh">内容创作者</span></div>
+      <div class="float-badge bottom-right" data-aos="zoom-in" data-aos-delay="900"><span class="dot"></span><span class="lang-en">Web Developer</span><span class="lang-zh">网页开发者</span></div>
+    </div>
+  </section>
+
+  <!-- 工具箱：平滑向上滑动 -->
+  <div class="software-grid" data-aos="fade-up">
+    <span style="color:var(--text-muted); font-size: 0.8rem; letter-spacing: 0.1em; text-transform: uppercase; align-self: center;">
+      <span class="lang-en">Toolkit</span><span class="lang-zh">我的工具箱</span>
+    </span>
+    <img src="Image/Pr2.png" alt="Premiere Pro" title="Adobe Premiere Pro">
+    <img src="Image/Ps2.png" alt="Photoshop" title="Adobe Photoshop">
+    <img src="Image/Ai2.png" alt="Illustrator" title="Adobe Illustrator">
+    <img src="Image/Ae.png" alt="After Effects" title="Adobe After Effects">
+    <img src="Image/Au2.png" alt="Audition" title="Adobe Audition">
+    <img src="Image/Maya.png" alt="Maya" title="Autodesk Maya">
+    <img src="Image/Figma.png" alt="Figma" title="Figma">
+    <img src="Image/Visual_Studio_Code.png" alt="VS Code" title="Visual Studio Code">
+  </div>
+
+  <!-- 技能区：核心动画展示 -->
+  <section class="skills-section">
+    <div class="section-header" data-aos="fade-up">
+      <h2 class="section-title">
+        <span class="lang-en">Core Disciplines</span><span class="lang-zh">核心专业领域</span>
+      </h2>
+      <a href="portfolio.html" class="section-link"><span class="lang-en">View all work &rarr;</span><span class="lang-zh">查看所有作品 &rarr;</span></a>
+    </div>
+    
+    <div class="skills-grid">
+      <!-- 为每个卡片添加不同的延迟 delay，形成阶梯式入场效果 -->
+      <div class="skill-card" data-aos="fade-up" data-aos-delay="100">
+        <div class="skill-icon"><i class="bi bi-camera-video"></i></div>
+        <h4><span class="lang-en">Video Production</span><span class="lang-zh">视频制作</span></h4>
+        <p><span class="lang-en">Comprehensive video editing, motion graphics, and esports content creation.</span><span class="lang-zh">全方位视频剪辑、动态图形设计以及电竞内容创作。</span></p>
+      </div>
+      <div class="skill-card" data-aos="fade-up" data-aos-delay="200">
+        <div class="skill-icon"><i class="bi bi-layout-wtf"></i></div>
+        <h4><span class="lang-en">UI/UX Design</span><span class="lang-zh">UI/UX 设计</span></h4>
+        <p><span class="lang-en">Crafting intuitive, user-centered digital interfaces with modern aesthetics.</span><span class="lang-zh">打造直观、以用户为中心且具现代美感的数字界面。</span></p>
+      </div>
+      <div class="skill-card" data-aos="fade-up" data-aos-delay="300">
+        <div class="skill-icon"><i class="bi bi-box"></i></div>
+        <h4><span class="lang-en">3D Modeling & Animation</span><span class="lang-zh">3D 建模与动画</span></h4>
+        <p><span class="lang-en">Bringing concepts to life using Autodesk Maya for digital environments and assets.</span><span class="lang-zh">使用 Autodesk Maya 将概念转化为栩栩如生的数字环境和资产。</span></p>
+      </div>
+      <div class="skill-card" data-aos="fade-up" data-aos-delay="400">
+        <div class="skill-icon"><i class="bi bi-camera"></i></div>
+        <h4><span class="lang-en">Photo Editing</span><span class="lang-zh">照片后期</span></h4>
+        <p><span class="lang-en">Professional skin retouching, color grading, and lighting enhancement for portraits.</span><span class="lang-zh">专业的人像皮肤精修、色彩分级以及光影增强。</span></p>
+      </div>
+      <div class="skill-card" data-aos="fade-up" data-aos-delay="500">
+        <div class="skill-icon"><i class="bi bi-magic"></i></div>
+        <h4><span class="lang-en">Image Manipulation</span><span class="lang-zh">图像合成</span></h4>
+        <p><span class="lang-en">Creating surreal digital worlds by seamlessly blending multiple photographic elements.</span><span class="lang-zh">通过无缝融合多种摄影元素，创造超现实的数字世界。</span></p>
+      </div>
+      <div class="skill-card" data-aos="fade-up" data-aos-delay="600">
+        <div class="skill-icon"><i class="bi bi-vector-pen"></i></div>
+        <h4><span class="lang-en">Graphic Design</span><span class="lang-zh">平面设计</span></h4>
+        <p><span class="lang-en">Brand identity systems, typography, and visual communication that makes an impact.</span><span class="lang-zh">极具影响力的品牌视觉识别系统、排版及视觉传达设计。</span></p>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer data-aos="fade-up" data-aos-offset="0">
+  <div class="logo" style="color: var(--accent); font-weight: bold;">DSON</div>
+  <p><span class="lang-en">© 2025-2026 DSON. All rights reserved.</span><span class="lang-zh">© 2025-2026 DSON. 保留所有权利。</span></p>
+</footer>
+
+<script src="DSON.js" defer></script>
+<script src="translate.js" defer></script>
+
+<!-- 2. 引入 AOS 库的 JS -->
+<script src="https://unpkg.com/aos@2.3.1/dist/aos.js"></script>
+<script>
+  // 3. 初始化 AOS
+  AOS.init({
+    duration: 1000, // 动画持续 1 秒
+    easing: 'ease-out-cubic', // 丝滑的缓动曲线
+    once: true, // 动画只执行一次（避免上下滚动时反复闪烁）
+    offset: 120 // 距离视口 120px 时触发
+  });
+
+  if (window.netlifyIdentity) {
+    window.netlifyIdentity.on("init", user => {
+      if (!user) {
+        window.netlifyIdentity.on("login", () => {
+          document.location.href = "/admin/";
+        });
+      }
+    });
+  }
+</script>
+
+</body>
+</html>
