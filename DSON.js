@@ -75,7 +75,8 @@ function renderDynamicGrid(works) {
             tools: work.tools,
             year: work.year,
             client: work.client,
-            client_zh: work.client_zh 
+            client_zh: work.client_zh,
+            thumbnail: work.thumbnail // ✨ 把图片地址加回来啦！
         };
 
         // Inject HTML Card
