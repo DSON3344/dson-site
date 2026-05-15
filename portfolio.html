@@ -10,7 +10,6 @@
   <link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=Inter:wght@300;400;500;600&family=Noto+Sans+SC:wght@300;400;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
   
-  <!-- 1. AOS Animation Library CSS -->
   <link href="https://unpkg.com/aos@2.3.1/dist/aos.css" rel="stylesheet">
   <link rel="stylesheet" href="DSON.css">
   
@@ -22,6 +21,12 @@
   <a href="index.html" class="nav-logo">
     <img src="Image/Logo_Colour.png" alt="DSON Logo" style="height: 36px; width: auto;">
   </a>
+
+  <div class="menu-toggle" id="menu-toggle">
+    <i class="bi bi-list open-icon"></i>
+    <i class="bi bi-x-lg close-icon" style="display: none;"></i>
+  </div>
+
   <ul class="nav-links">
     <li><a href="index.html"><span class="lang-en">Home</span><span class="lang-zh">首页</span></a></li>
     <li><a href="portfolio.html" class="active"><span class="lang-en">Portfolio</span><span class="lang-zh">作品集</span></a></li>
@@ -35,7 +40,6 @@
 </nav>
 
 <main>
-  <!-- Header: Changed to Fade-in for a clean entrance -->
   <div class="page-header" data-aos="fade-in" data-aos-duration="1500">
     <h1>
       <span class="lang-en">Portfolio</span><span class="lang-zh">作品集</span>
@@ -48,7 +52,7 @@
 
   <div class="filter-bar" data-aos="fade-in" data-aos-delay="400">
     <button class="filter-btn active" onclick="filterPortfolio('all', this)">
-      <span class="lang-en">ALL WORK</span><span class="lang-zh">所有作品</span>
+      <span class="lang-en">LATEST WORK</span><span class="lang-zh">最新作品</span>
     </button>
     <button class="filter-btn" onclick="filterPortfolio('video', this)">
       <span class="lang-en">VIDEO</span><span class="lang-zh">视频制作</span>
@@ -70,7 +74,6 @@
     </button>
   </div>
 
-  <!-- Portfolio grid will be populated by DSON.js -->
   <div class="portfolio-grid" id="portfolio-grid"></div>
 
   <div class="load-more-container" id="load-more-container" style="text-align: center; margin: 3rem 0; display: none;">
@@ -84,6 +87,10 @@
   <div class="modal" id="modal-content"></div>
 </div>
 
+<button id="backToTopBtn" class="back-to-top" onclick="scrollToTop()">
+    <i class="bi bi-arrow-up"></i>
+</button>
+
 <footer data-aos="fade-up" data-aos-offset="0">
   <div class="logo" style="color: var(--accent); font-weight: bold; font-family: 'Syne', sans-serif;">DSON</div>
   <p>
@@ -93,51 +100,46 @@
 </footer>
 
 <script src="DSON.js" defer></script>
-<script src="translate.js" defer></script>
-
-<!-- 2. AOS Library JS -->
-<script src="https://unpkg.com/aos@2.3.1/dist/aos.js"></script>
 
 <script src="https://unpkg.com/aos@2.3.1/dist/aos.js"></script>
 
 <script>
   /**
-   * 💡 逻辑优化：将动画绑定逻辑与数据加载深度结合
+   * Animation controller synced with dynamic content loading
    */
   function applyPortfolioAnimations() {
     const cards = document.querySelectorAll('.portfolio-item');
     
     if (cards.length > 0) {
       cards.forEach((card, index) => {
-        // 如果卡片还没有动画属性，则根据索引添加
+        // Only assign custom viewport animations if not already defined
         if (!card.hasAttribute('data-aos')) {
-          // 奇偶交替：偶数索引从左进(fade-right)，奇数索引从右进(fade-left)
           const animationType = (index % 2 === 0) ? 'fade-right' : 'fade-left';
           card.setAttribute('data-aos', animationType);
-          card.setAttribute('data-aos-delay', '50'); // 稍微给一点点延迟，避开首屏加载挤塞
+          card.setAttribute('data-aos-delay', '50'); 
         }
       });
 
-      // 关键：先初始化再刷新，确保第一排被捕捉到
+      // Initialize AOS with immediate response configurations
       AOS.init({
         duration: 1000,
         easing: 'ease-out-cubic',
         once: true,
-        offset: 0 // 将 offset 设为 0，确保第一排在顶部就能触发
+        offset: 0 
       });
       
       AOS.refreshHard(); 
       console.log("Animations applied to " + cards.length + " items!");
     } else {
-      // 如果还没渲染出来，继续等待
+      // Retry injection if dynamic data elements are not fully parsed yet
       setTimeout(applyPortfolioAnimations, 50);
     }
   }
 
-  // 1. 页面资源加载完执行
+  // Bind animation logic on system loading windows
   window.addEventListener('load', applyPortfolioAnimations);
 
-  // 2. 额外保险：针对异步加载，每秒检查一次直到成功（防止 load 事件过早触发）
+  // Fallback pooling system to double-check asynchronous CMS loading streams
   let checkCount = 0;
   const ensureAOS = setInterval(() => {
     const cards = document.querySelectorAll('.portfolio-item');
@@ -148,7 +150,28 @@
     checkCount++;
   }, 500);
 
-  // Netlify Identity
+  // ✨ Added: Hamburger Menu Interactivity Control Handler
+  const menuToggle = document.getElementById('menu-toggle');
+  const mainNav = document.getElementById('main-nav');
+  const openIcon = document.querySelector('.open-icon');
+  const closeIcon = document.querySelector('.close-icon');
+
+  if (menuToggle && mainNav) {
+      menuToggle.addEventListener('click', () => {
+          mainNav.classList.toggle('nav-active');
+          
+          // Smooth icon display toggle toggles between standard lines and close matrix
+          if (mainNav.classList.contains('nav-active')) {
+              openIcon.style.display = 'none';
+              closeIcon.style.display = 'block';
+          } else {
+              openIcon.style.display = 'block';
+              closeIcon.style.display = 'none';
+          }
+      });
+  }
+
+  // Netlify Identity Connectivity Handler
   if (window.netlifyIdentity) {
     window.netlifyIdentity.on("init", user => {
       if (!user) {

@@ -1,4 +1,6 @@
-/* Core Variables with a futuristic cyan/tech accent */
+/* ==========================================================================
+   ✨ Global Variables & Futuristic Baseline Styles
+   ========================================================================== */
 :root {
     --black: #080a0f;
     --white: #f0f4f8;
@@ -29,7 +31,7 @@ body {
     overflow-x: hidden;
 }
 
-/* Navigation */
+/* Navigation Baseline */
 nav {
     position: fixed;
     top: 0;
@@ -59,7 +61,6 @@ nav {
 .nav-links {
     display: flex;
     gap: 4.5rem;
-    /* Increased spacing */
     list-style: none;
 }
 
@@ -80,7 +81,7 @@ nav {
     color: var(--accent);
 }
 
-/* Language Switcher UI */
+/* Language Switcher UI Baseline */
 .lang-switcher {
     display: flex;
     gap: 1rem;
@@ -117,7 +118,10 @@ main {
     }
 }
 
-/* Hero Section */
+
+/* ==========================================================================
+   ✨ Hero Section Layout & Anti-Overflow Desktop Baselines
+   ========================================================================== */
 .hero {
     min-height: calc(100vh - var(--nav-height));
     display: grid;
@@ -154,13 +158,14 @@ main {
     margin-bottom: 2rem;
 }
 
+/* Desktop Fix: Adaptive Fluid Font scaling */
 .hero h1 { 
-  font-family: 'Syne', sans-serif; 
-  font-size: clamp(3rem, 6vw, 5.5rem); 
-  font-weight: 800; 
-  line-height: 1.0; /* Tighter line height for modern fonts */
-  margin-bottom: 1.5rem; 
-  letter-spacing: -0.02em; /* Tighter letter spacing for impact */
+    font-family: 'Syne', sans-serif; 
+    font-size: clamp(2.5rem, 4vw, 3.8rem) !important; 
+    font-weight: 800; 
+    line-height: 1.1 !important; 
+    margin-bottom: 1.5rem; 
+    letter-spacing: -0.02em; 
 }
 
 .hero h1 em {
@@ -169,9 +174,9 @@ main {
 }
 
 .section-title, .page-header h1 { 
-  font-family: 'Syne', sans-serif; 
-  font-weight: 700; 
-  font-size: 2.2rem; 
+    font-family: 'Syne', sans-serif; 
+    font-weight: 700; 
+    font-size: 2.2rem; 
 }
 
 .hero-desc {
@@ -183,70 +188,43 @@ main {
 }
 
 .hero-img-right h3 {
-  font-family: 'Syne', sans-serif;
-  font-size: 1.4rem;
-  font-weight: 700;
-  line-height: 1.2;
-  margin-bottom: 0.5rem;
-  color: var(--white);
+    font-family: 'Syne', sans-serif;
+    font-size: 1.4rem;
+    font-weight: 700;
+    line-height: 1.2;
+    margin-bottom: 0.5rem;
+    color: var(--white);
 }
 
-/* Buttons */
+/* Desktop Fix: Globally force flexibility wrapper */
 .btn-group {
     display: flex;
-    gap: 1rem;
+    gap: 1.2rem;
     flex-wrap: wrap;
 }
 
-.btn-primary {
-    background: var(--accent);
-    color: var(--black);
-    border: none;
-    padding: 14px 32px;
-    font-family: 'DM Sans', sans-serif;
-    font-size: 0.85rem;
-    font-weight: 500;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    cursor: pointer;
-    border-radius: 2px;
-    transition: background 0.2s, transform 0.15s;
-    text-decoration: none;
-}
-
-.btn-primary:hover {
-    background: var(--accent-dark);
-    transform: translateY(-2px);
-}
-
 .btn-primary, .btn-outline {
-  font-family: 'Inter', sans-serif;
-  font-weight: 600;
-  letter-spacing: 0.05em;
-}
-
-.btn-outline {
-    background: transparent;
-    color: var(--white);
-    border: 1px solid rgba(240, 244, 248, 0.25);
     padding: 14px 32px;
-    font-family: 'DM Sans', sans-serif;
+    font-family: 'Inter', sans-serif;
     font-size: 0.85rem;
-    font-weight: 400;
-    letter-spacing: 0.08em;
+    font-weight: 600;
+    letter-spacing: 0.05em;
     text-transform: uppercase;
     cursor: pointer;
     border-radius: 2px;
-    transition: border-color 0.2s, color 0.2s;
+    transition: 0.2s;
     text-decoration: none;
 }
 
-.btn-outline:hover {
-    border-color: var(--accent);
-    color: var(--accent);
-}
+.btn-primary { background: var(--accent); color: var(--black); border: none; }
+.btn-primary:hover { background: var(--accent-dark); transform: translateY(-2px); }
 
-/* --- Hero Visual Element (Thick Border & Overlap Badges) --- */
+.btn-outline { background: transparent; color: var(--white); border: 1px solid rgba(240, 244, 248, 0.25); }
+.btn-outline:hover { border-color: var(--accent); color: var(--accent); }
+
+/* ==========================================================================
+   ✨ Hero Visual Element (Thick Border & Desktop Badge Overlaps)
+   ========================================================================== */
 .hero-visual {
     position: relative;
     display: flex;
@@ -255,7 +233,6 @@ main {
     height: 520px;
 }
 
-/* The card frame container */
 .hero-img-frame {
     width: 400px;
     height: 400px;
@@ -270,18 +247,13 @@ main {
     align-items: center;
 }
 
-/* The ultimate magic to never crop the photo! */
 .hero-img-frame img {
     width: 100%;
-    /* Controls the padding between photo and frame */
     height: 100%;
-    /* Controls the padding between photo and frame */
     object-fit: contain;
-    /* Absolutely no cropping! Scale proportionally */
     display: block;
 }
 
-/* Float Badges Base Style */
 .float-badge {
     position: absolute;
     background: rgba(17, 21, 32, 0.85);
@@ -306,28 +278,11 @@ main {
     box-shadow: 0 0 8px var(--accent);
 }
 
-/* Precise overlap positioning */
-.float-badge.top-left {
-    top: 120px;
-    right: calc(50% + 150px);
-}
+.float-badge.top-left { top: 120px; right: calc(50% + 150px); }
+.float-badge.top-right { top: 50px; left: calc(50% + 120px); }
+.float-badge.bottom-left { bottom: 90px; right: calc(50% + 120px); }
+.float-badge.bottom-right { bottom: 140px; left: calc(50% + 150px); }
 
-.float-badge.top-right {
-    top: 50px;
-    left: calc(50% + 120px);
-}
-
-.float-badge.bottom-left {
-    bottom: 90px;
-    right: calc(50% + 120px);
-}
-
-.float-badge.bottom-right {
-    bottom: 140px;
-    left: calc(50% + 150px);
-}
-
-/* Grid Background */
 .hero-grid-bg {
     position: absolute;
     inset: 0;
@@ -336,7 +291,10 @@ main {
     background-size: 40px 40px;
 }
 
-/* Software Tools Grid */
+
+/* ==========================================================================
+   ✨ Static Document Component Baselines (Desktop view grids)
+   ========================================================================== */
 .software-grid {
     display: flex;
     flex-wrap: wrap;
@@ -346,35 +304,13 @@ main {
     border-top: 1px solid var(--border);
 }
 
-.software-grid img {
-    height: 40px;
-    opacity: 0.6;
-    transition: opacity 0.3s, transform 0.3s;
-}
+.software-grid img { height: 40px; opacity: 0.6; transition: opacity 0.3s, transform 0.3s; }
+.software-grid img:hover { opacity: 1; transform: translateY(-3px); }
 
-.software-grid img:hover {
-    opacity: 1;
-    transform: translateY(-3px);
-}
+.skills-section { padding: 4rem 4vw 6rem; }
+.section-header { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 3rem; }
+.section-title { font-size: 2.2rem; }
 
-/* Skills Section */
-.skills-section {
-    padding: 4rem 4vw 6rem;
-}
-
-.section-header {
-    display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-    margin-bottom: 3rem;
-}
-
-.section-title {
-    font-family: 'Playfair Display', serif;
-    font-size: 2.2rem;
-}
-
-/* View All Work Link */
 .section-link {
     font-size: 0.8rem;
     color: var(--accent);
@@ -384,82 +320,40 @@ main {
     transition: color 0.2s ease, transform 0.3s ease;
     display: inline-block;
 }
+.section-link:hover { color: var(--white); transform: translateX(4px); }
 
-.section-link:hover {
-    color: var(--white);
-    transform: translateX(4px);
-}
-
-.skills-grid {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 1px;
-    border: 1px solid var(--border);
-}
-
+.skills-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; border: 1px solid var(--border); }
 .skill-card {
-    padding: 2rem;
+    padding: 2.5rem 2rem;
     background: var(--card-bg);
     transition: background 0.25s;
     cursor: pointer;
     position: relative;
     overflow: hidden;
 }
-
 .skill-card::after {
     content: '';
     position: absolute;
-    bottom: 0;
-    left: 0;
-    height: 2px;
-    width: 0;
+    bottom: 0; left: 0;
+    height: 2px; width: 0;
     background: var(--accent);
     transition: width 0.35s ease;
 }
-
-.skill-card:hover {
-    background: #181d2c;
-}
-
-.skill-card:hover::after {
-    width: 100%;
-}
+.skill-card:hover { background: #181d2c; }
+.skill-card:hover::after { width: 100%; }
 
 .skill-icon {
-    font-size: 1.8rem;
-    margin-bottom: 1rem;
-    width: 48px;
-    height: 48px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: rgba(0, 210, 255, 0.08);
-    border-radius: 4px;
-    color: var(--accent);
+    font-size: 1.8rem; margin-bottom: 1rem;
+    width: 48px; height: 48px;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(0, 210, 255, 0.08); border-radius: 4px; color: var(--accent);
 }
+.skill-card h4 { font-size: 1rem; font-weight: 500; margin-bottom: 0.5rem; }
+.skill-card p { font-size: 0.82rem; color: var(--text-muted); line-height: 1.6; }
 
-.skill-card h4 {
-    font-size: 1rem;
-    font-weight: 500;
-    margin-bottom: 0.5rem;
-}
-
-.skill-card p {
-    font-size: 0.82rem;
-    color: var(--text-muted);
-    line-height: 1.6;
-}
-
-/* Headers (Portfolio, Social, Contact) */
-.page-header {
-    padding: 4rem 4vw 2rem;
-}
-
-.page-header h1 {
-    font-family: 'Playfair Display', serif;
-    font-size: 2.8rem;
-}
-
+/* --- Headers & Inner Page Elements Baseline --- */
+.page-header { padding: 4rem 4vw 2rem; }
+.page-header h1 { font-size: 2.8rem; }
 .page-header p {
     color: var(--text-muted);
     margin-top: 0.75rem;
@@ -468,335 +362,452 @@ main {
     max-width: 600px;
 }
 
-/* Filter Bar */
-.filter-bar {
-    display: flex;
-    gap: 0.6rem;
-    flex-wrap: wrap;
-    padding: 0 4vw 2.5rem;
-}
-
+.filter-bar { display: flex; gap: 0.6rem; flex-wrap: wrap; padding: 0 4vw 2.5rem; }
 .filter-btn {
-    background: transparent;
-    border: 1px solid var(--border);
-    color: var(--text-muted);
-    padding: 10px 22px;
-    font-family: 'DM Sans', sans-serif;
-    font-size: 0.75rem;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    cursor: pointer;
-    border-radius: 2px;
-    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    background: transparent; border: 1px solid var(--border); color: var(--text-muted);
+    padding: 10px 22px; font-family: 'Inter', sans-serif; font-size: 0.75rem;
+    letter-spacing: 0.08em; text-transform: uppercase; cursor: pointer;
+    border-radius: 2px; transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
-
-.filter-btn:hover {
-    border-color: rgba(0, 210, 255, 0.5);
-    color: var(--white);
-}
-
+.filter-btn:hover { border-color: rgba(0, 210, 255, 0.5); color: var(--white); }
 .filter-btn.active {
-    border-color: var(--accent);
-    color: var(--accent);
-    background: rgba(0, 210, 255, 0.08);
-    box-shadow: 0 0 15px rgba(0, 210, 255, 0.1);
+    border-color: var(--accent); color: var(--accent);
+    background: rgba(0, 210, 255, 0.08); box-shadow: 0 0 15px rgba(0, 210, 255, 0.1);
 }
 
-/* Portfolio Layout */
+/* ==========================================================================
+   ✨ Portfolio Layout Baseline (Desktop)
+   ========================================================================== */
 .portfolio-grid {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 1px;
-    background: var(--border);
-    /* Add margin to prevent the entire container from touching the screen edges */
-    /* 4vw perfectly aligns with your navigation and header padding */
-    margin: 0 4vw 4rem 4vw; 
-    border: 1px solid var(--border); /* Add a border around the whole grid block */
-    border-radius: 6px; /* Optional: Slight rounded corners for a premium feel */
-    overflow: hidden; /* Keep the corners clean */
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px;
+    background: var(--border); margin: 0 4vw 4rem 4vw; 
+    border: 1px solid var(--border); border-radius: 6px; overflow: hidden; 
 }
 
 .portfolio-item {
-    background: var(--card-bg);
-    cursor: pointer;
-    position: relative;
-    overflow: hidden;
-    aspect-ratio: 1;
-    display: flex;
-    align-items: flex-end;
-    /* Remove transition here to prevent the whole card from shifting */
+    background: var(--card-bg); cursor: pointer; position: relative;
+    overflow: hidden; aspect-ratio: 1; display: flex; align-items: flex-end;
 }
+.portfolio-item.bento-large { grid-column: span 2; aspect-ratio: auto; min-height: 380px; }
 
-/* Dynamic Grid Pattern: Controlled by JavaScript adding .bento-large */
-.portfolio-item.bento-large {
-    grid-column: span 2;
-    aspect-ratio: auto;
-    min-height: 380px;
-}
-
-/* Background container for the image */
-.portfolio-bg {
-    position: absolute;
-    inset: 0;
-    z-index: 0;
-}
+.portfolio-bg { position: absolute; inset: 0; z-index: 0; }
 
 .portfolio-overlay {
-    position: absolute;
-    inset: 0;
+    position: absolute; inset: 0;
     background: linear-gradient(transparent 30%, rgba(8, 10, 15, 0.95) 100%);
-    opacity: 0;
-    transition: opacity 0.3s;
-    z-index: 1;
-}
-
-.portfolio-item:hover .portfolio-overlay {
-    opacity: 1;
+    opacity: 0; transition: opacity 0.3s; z-index: 1;
 }
 
 .portfolio-info {
-    position: relative;
-    z-index: 2;
-    padding: 1.5rem;
-    transform: translateY(20px);
-    transition: transform 0.4s ease, opacity 0.3s;
-    opacity: 0;
+    position: absolute; bottom: 0; left: 0; right: 0; padding: 2rem;
+    background: linear-gradient(transparent, rgba(0, 0, 0, 0.85));
+    opacity: 0; transition: 0.3s; z-index: 2; 
 }
 
-.portfolio-item:hover .portfolio-info {
-    transform: translateY(0);
-    opacity: 1;
-}
+.portfolio-item:hover .portfolio-overlay { opacity: 1; }
+.portfolio-item:hover .portfolio-info { opacity: 1; }
+.portfolio-info h3 { font-family: 'Syne', sans-serif; font-size: 1.3rem; font-weight: 700; }
+.portfolio-info span { font-size: 0.72rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent); display: block; margin-bottom: 6px; }
 
-.portfolio-info h3 { 
-    font-family: 'Syne', sans-serif; 
-    font-size: 1.3rem; 
-    font-weight: 700;
-}
+.portfolio-art { display: none; }
 
-.portfolio-info span {
-    font-size: 0.72rem;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    color: var(--accent);
-    display: block;
-    margin-bottom: 6px;
-}
-
-/* Hide the placeholder icons */
-.portfolio-art {
-    display: none; 
-}
-
-/* Image fills the ENTIRE grid cell now */
 .portfolio-img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover; /* Perfectly crop and fill the box */
-    display: block;
-    transition: transform 0.6s ease;
-    object-position: center; 
+    width: 100%; height: 100%; object-fit: cover !important; 
+    object-position: center !important; display: block; transition: transform 0.6s ease;
 }
+.portfolio-item:hover .portfolio-img { transform: scale(1.05); }
 
-/* Image zoom effect on hover */
-.portfolio-item:hover .portfolio-img {
-    transform: scale(1.05); 
-}
+/* Background Gradients Patterns */
+.pat-code { background: linear-gradient(135deg, #0a1128 0%, #101830 100%); }
+.pat-video { background: linear-gradient(135deg, #081015 0%, #102028 100%); }
+.pat-uiux { background: linear-gradient(135deg, #0a1520 0%, #102840 100%); }
 
-/* Patterns */
-.pat-code {
-    background: linear-gradient(135deg, #0a1128 0%, #101830 100%);
-}
-
-.pat-video {
-    background: linear-gradient(135deg, #081015 0%, #102028 100%);
-}
-
-.pat-uiux {
-    background: linear-gradient(135deg, #0a1520 0%, #102840 100%);
-}
-
-/* Modal Overlay */
+/* ==========================================================================
+   ✨ Modal Core Styles
+   ========================================================================== */
 .modal-overlay {
-    display: none;
-    position: fixed;
-    inset: 0;
-    z-index: 200;
-    background: rgba(0, 0, 0, 0.85);
-    align-items: center;
-    justify-content: center;
-    padding: 2rem;
-    backdrop-filter: blur(5px);
+    display: none; position: fixed; inset: 0; z-index: 200;
+    background: rgba(0, 0, 0, 0.85); align-items: center; justify-content: center;
+    padding: 2rem; backdrop-filter: blur(5px);
 }
+.modal-overlay.open { display: flex; }
 
-.modal-overlay.open {
-    display: flex;
+.modal-close {
+    position: absolute; top: 1rem; right: 1.25rem; background: none; border: none;
+    color: var(--text-muted); font-size: 1.5rem; cursor: pointer; transition: color 0.2s; z-index: 100;
 }
+.modal-close:hover { color: var(--white); }
 
+/* ==========================================================================
+   ✨ DESKTOP MODAL OPTIMIZATION (Prevent Scrollbars & Fix Image Sizing) ✨
+   ========================================================================== */
 .modal {
     background: var(--card-bg);
     border: 1px solid var(--border);
-    border-radius: 4px;
-    max-width: 700px;
-    width: 100%;
-    padding: 2.5rem;
+    border-radius: 12px !important;
+    max-width: 1100px !important;
+    width: 92% !important;
+    max-height: 88vh !important; /* 强制封顶，杜绝外部滚动条喵！ */
+    padding: 3rem !important;
     position: relative;
     animation: fadeIn 0.3s;
+    overflow: hidden !important; 
+    display: flex !important;
+    flex-direction: column !important;
 }
 
-.modal-close {
-    position: absolute;
-    top: 1rem;
-    right: 1.25rem;
-    background: none;
-    border: none;
-    color: var(--text-muted);
-    font-size: 1.5rem;
-    cursor: pointer;
-    transition: color 0.2s;
+/* 内部弹性盒子并排排列 */
+.modal > div:not(.modal-close) {
+    display: flex !important;
+    align-items: center !important;
+    flex-wrap: nowrap !important; /* 强行在桌面端左右排布 */
+    height: 100% !important;
+    min-height: 0 !important; 
 }
 
-.modal-close:hover {
-    color: var(--white);
+/* 左侧媒体区 (占 60% 宽度) */
+.modal > div:not(.modal-close) > div:nth-child(1) {
+    flex: 1 1 60% !important;
+    height: 100% !important;
+    min-height: 0 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: center !important;
+    align-items: center !important;
 }
 
-/* Social Cards */
-.social-platforms {
-    padding: 2rem 4vw;
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 1.5rem;
+/* 强迫图片乖乖缩放，绝不撑爆屏幕喵！ */
+.modal .portfolio-img,
+.modal iframe {
+    max-height: 72vh !important;
+    max-width: 100% !important;
+    width: auto !important;
+    height: auto !important;
+    object-fit: contain !important; /* 保持原比例完整显示喵 */
+    border-radius: 8px !important;
+    display: block !important;
+    margin: 0 auto !important;
 }
 
+.modal > div:not(.modal-close) > div:nth-child(1) > div:first-child {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    width: 100% !important;
+    height: 100% !important;
+}
+
+/* 桌面端画廊计数器美化 */
+#gallery-counter {
+    margin-top: 15px !important;
+    background: rgba(0, 210, 255, 0.1) !important;
+    border: 1px solid rgba(0, 210, 255, 0.3) !important;
+    color: var(--accent) !important;
+    padding: 6px 20px !important;
+    border-radius: 20px !important;
+    font-size: 0.8rem !important;
+    letter-spacing: 2px !important;
+    z-index: 5;
+}
+
+/* 右侧文本区 (占 40% 宽度) */
+.modal > div:not(.modal-close) > div:nth-child(2) {
+    flex: 1 1 40% !important;
+    max-height: 75vh !important;
+    overflow-y: auto !important; /* 万一文字太长，单独让文字产生细滚动条 */
+    padding-right: 15px !important;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: center !important;
+}
+
+/* 为右侧文字专门定做的隐形滚动条喵 */
+.modal > div:not(.modal-close) > div:nth-child(2)::-webkit-scrollbar { width: 4px; }
+.modal > div:not(.modal-close) > div:nth-child(2)::-webkit-scrollbar-thumb {
+    background: rgba(0, 210, 255, 0.3); border-radius: 10px;
+}
+
+
+/* ==========================================================================
+   ✨ Social & Contact Grids
+   ========================================================================== */
+.social-platforms { padding: 2rem 4vw; display: grid; grid-template-columns: repeat(2, 1fr); gap: 1.5rem; }
 .platform-card {
-    background: var(--card-bg);
-    border: 1px solid var(--border);
-    border-radius: 4px;
-    padding: 2rem;
-    position: relative;
-    transition: transform 0.2s;
-    text-decoration: none;
-    color: var(--white);
-    display: block;
+    background: var(--card-bg); border: 1px solid var(--border); border-radius: 4px;
+    padding: 2rem; position: relative; transition: transform 0.2s; text-decoration: none;
+    color: var(--white); display: block;
 }
-
-.platform-card:hover {
-    border-color: var(--accent);
-    transform: translateY(-3px);
-}
-
-.platform-header {
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-    margin-bottom: 1rem;
-}
-
+.platform-card:hover { border-color: var(--accent); transform: translateY(-3px); }
+.platform-header { display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem; }
 .platform-icon {
-    width: 48px;
-    height: 48px;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 1.4rem;
-    background: rgba(0, 210, 255, 0.1);
-    color: var(--accent);
+    width: 48px; height: 48px; border-radius: 50%; display: flex; align-items: center;
+    justify-content: center; font-size: 1.4rem; background: rgba(0, 210, 255, 0.1); color: var(--accent);
 }
 
-/* Contact Adjustments */
-.contact-wrapper {
-    padding: 2rem 4vw 4rem;
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 6rem;
-    align-items: start;
-}
-
-.contact-item {
-    display: flex;
-    align-items: flex-start;
-    gap: 1rem;
-    margin-bottom: 1.5rem;
-}
-
+.contact-wrapper { padding: 2rem 4vw 4rem; display: grid; grid-template-columns: 1fr 1fr; gap: 6rem; align-items: start; }
+.contact-item { display: flex; align-items: flex-start; gap: 1rem; margin-bottom: 1.5rem; }
 .contact-item-icon {
-    width: 40px;
-    height: 40px;
-    background: rgba(0, 210, 255, 0.1);
-    border: 1px solid var(--border);
-    border-radius: 4px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: var(--accent);
+    width: 40px; height: 40px; background: rgba(0, 210, 255, 0.1); border: 1px solid var(--border);
+    border-radius: 4px; display: flex; align-items: center; justify-content: center; color: var(--accent);
 }
+.contact-item-text label { font-size: 0.72rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-muted); display: block; margin-bottom: 4px; }
 
-.contact-item-text label {
-    font-size: 0.72rem;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    color: var(--text-muted);
-    display: block;
-    margin-bottom: 4px;
-}
+footer { border-top: 1px solid var(--border); padding: 3rem 4vw; display: flex; align-items: center; justify-content: space-between; }
+footer p { font-size: 0.8rem; color: var(--text-muted); }
 
-/* Footer */
-footer {
-    border-top: 1px solid var(--border);
-    padding: 3rem 4vw;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-}
+/* Mobile Menu Toggle Default Hide */
+.menu-toggle { display: none; }
 
-footer p {
-    font-size: 0.8rem;
-    color: var(--text-muted);
-}
 
-/* Responsive Adjustments */
+/* ==========================================================================
+   ✨ FULL MOBILE RESPONSIVE OPTIMIZATION (max-width 900px)
+   ========================================================================== */
 @media (max-width: 900px) {
-    .hero {
-        grid-template-columns: 1fr;
-        padding: 2rem 4vw;
+    
+    /* --- Tech Glassmorphism Floating Menu Ball --- */
+    .menu-toggle {
+        display: flex !important; justify-content: center; align-items: center;
+        position: absolute !important; 
+        top: 13px !important; right: 4vw !important; 
+        width: 46px !important; height: 46px !important;
+        color: #ffffff; cursor: pointer; border-radius: 50%; font-size: 1.5rem; 
+        z-index: 10000 !important; 
+        background: rgba(15, 15, 15, 0.6); backdrop-filter: blur(12px);
+        border: 1px solid rgba(0, 238, 255, 0.25); box-shadow: 0 4px 15px rgba(0, 238, 255, 0.2);
+        transition: all 0.3s ease;
     }
+    .menu-toggle:hover { transform: scale(1.08) !important; border-color: rgba(0, 238, 255, 0.6) !important; }
 
+    #main-nav { display: flex; justify-content: flex-start; align-items: center; gap: 2rem; padding: 1.2rem 1.5rem; background: transparent; }
+    .lang-switcher { margin-left: 0; margin-right: 0; }
+
+    .nav-links {
+        position: fixed; top: 0; right: -100%; width: 75%; height: 100vh;
+        display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 2.5rem;
+        z-index: 9998; transition: right 0.4s cubic-bezier(0.77, 0, 0.175, 1);
+        background: rgba(10, 10, 10, 0.88); backdrop-filter: blur(20px); border-left: 1px solid rgba(255, 255, 255, 0.05);
+    }
+    #main-nav.nav-active .nav-links { right: 0; }
+    .nav-links li a { font-size: 1.35rem; letter-spacing: 0.12em; }
+
+    /* --- Mobile Layout Stacking & Hero Typography Overflow Fix --- */
+    .hero { grid-template-columns: 1fr; padding: 2rem 4vw; overflow-x: hidden; }
+    .hero h1 { font-size: 2.2rem !important; line-height: 1.15 !important; letter-spacing: -0.01em !important; word-break: break-word !important; }
+    .hero-desc { font-size: 0.95rem !important; line-height: 1.6 !important; }
+    .btn-group { width: 100% !important; }
+    .btn-group a { flex: 1 1 160px !important; text-align: center; font-size: 0.85rem !important; }
+
+    /* --- HERO VISUAL BUBBLE FIX (Prevents overflowing off-screen) --- */
     .hero-visual {
-        display: none;
+        display: flex !important; justify-content: center; align-items: center;
+        position: relative; width: 100%; height: auto !important; margin: 3rem 0 2rem 0 !important;
+    }
+    .hero-img-frame { width: 220px !important; height: 220px !important; }
+
+    .float-badge { 
+        font-size: 0.65rem !important; padding: 6px 10px !important; 
+        white-space: nowrap !important; z-index: 20 !important;
+    }
+    .float-badge.top-left { top: 10% !important; left: 0 !important; right: auto !important; }
+    .float-badge.bottom-left { bottom: 10% !important; left: 0 !important; right: auto !important; }
+    .float-badge.top-right { top: 5% !important; right: 0 !important; left: auto !important; }
+    .float-badge.bottom-right { bottom: 5% !important; right: 0 !important; left: auto !important; }
+
+    /* --- PORTFOLIO EVOLUTION: 2x2 Layout with Info BELOW Images --- */
+    .portfolio-grid {
+        display: grid !important;
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important; 
+        gap: 30px 15px !important; margin: 0 4vw 4rem !important; width: 92vw !important; 
+        background: transparent !important; border: none !important; padding: 0 !important; overflow: visible !important; 
     }
 
-    .skills-grid,
-    .portfolio-grid,
-    .social-platforms,
-    .contact-wrapper {
-        grid-template-columns: 1fr;
+    .portfolio-item, .portfolio-item.bento-large {
+        grid-column: span 1 !important; display: flex !important; flex-direction: column !important; 
+        justify-content: flex-start !important; align-items: stretch !important;
+        height: auto !important; aspect-ratio: auto !important; background: transparent !important;
+        border: none !important; padding: 0 !important; margin: 0 !important;
+        overflow: visible !important; position: relative !important;
     }
 
-    .portfolio-item.bento-large,
-    .portfolio-item {
-        grid-column: span 1;
-        aspect-ratio: auto;
-        min-height: 320px;
+    .portfolio-bg {
+        position: relative !important; width: 100% !important; height: auto !important; aspect-ratio: 1 / 1 !important; 
+        border-radius: 8px !important; overflow: hidden !important; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3) !important;
+        margin-bottom: 12px !important; flex-shrink: 0 !important;
     }
 
-    .hero-img-frame {
-        flex-direction: column;
-        height: auto;
+    .portfolio-bg .portfolio-img {
+        position: absolute !important; inset: 0 !important;
+        width: 100% !important; height: 100% !important;
+        object-fit: cover !important; object-position: center !important; 
+        transform: none !important; display: block !important;
     }
 
-    .hero-img-left,
-    .hero-img-right {
-        width: 100%;
-        flex: auto;
+    .portfolio-overlay { display: none !important; }
+
+    .portfolio-info {
+        position: static !important; opacity: 1 !important; transform: none !important; padding: 0 !important; 
+        background: none !important; background-color: transparent !important; text-align: left !important;
+        width: 100% !important; display: block !important; flex-grow: 1 !important;
     }
+
+    .portfolio-info h3 {
+        font-size: 0.95rem !important; line-height: 1.4 !important; color: var(--white) !important;
+        margin: 4px 0 0 0 !important; font-weight: 700 !important; white-space: normal !important; word-wrap: break-word !important;
+    }
+
+    .portfolio-info span {
+        font-size: 0.7rem !important; color: var(--accent) !important; letter-spacing: 0.05em !important;
+        text-transform: uppercase !important; display: block !important; margin: 0 !important;
+    }
+
+    /* --- Core Disciplines 2-Columns Square Grid --- */
+    .skills-grid { display: grid !important; grid-template-columns: repeat(2, 1fr) !important; gap: 1.2rem !important; border: none !important; }
+    .skill-card {
+        padding: 1.2rem !important; display: flex !important; flex-direction: column !important;
+        justify-content: center !important; align-items: center !important;
+        aspect-ratio: 1 !important; border: 1px solid var(--border) !important; border-radius: 4px;
+    }
+    .skill-card .skill-icon { width: 36px !important; height: 36px !important; margin-bottom: 0.5rem !important; }
+    .skill-card h4 { font-size: 0.88rem !important; }
+    .skill-card p { font-size: 0.72rem !important; line-height: 1.4 !important; }
+
+    /* --- Software Toolkit Matrix Optimization (4x2) --- */
+    .software-grid { display: grid !important; grid-template-columns: repeat(4, 1fr) !important; gap: 1.2rem !important; max-width: 320px !important; margin: 3rem auto !important; }
+    .software-grid span { grid-column: 1 / -1 !important; text-align: center; margin-bottom: 0.5rem !important; }
+    .software-grid img { width: 42px !important; height: auto !important; }
+
+    .social-platforms, .contact-wrapper { grid-template-columns: 1fr; }
+    .hero-img-frame { flex-direction: column; height: auto; width: 100%; }
+
+
+    /* ----------------------------------------------------------------------
+       ✨✨✨ MODAL MOBILE OPTIMIZATION (CRITICAL BUG FIXES) ✨✨✨
+       ---------------------------------------------------------------------- */
+    .modal {
+        padding: 1.5rem !important; 
+        border-radius: 12px !important;
+        max-height: 85vh !important;
+        position: relative !important;
+        display: flex !important;
+        flex-direction: column !important;
+    }
+
+    .modal-close {
+        top: 12px !important; right: 12px !important; background: rgba(0, 0, 0, 0.7) !important;
+        border-radius: 50% !important; width: 36px !important; height: 36px !important;
+        display: flex !important; align-items: center !important; justify-content: center !important;
+        font-size: 1.3rem !important; color: #fff !important; 
+        z-index: 10001 !important; 
+    }
+
+    .modal > div:not(.modal-close) {
+        gap: 1.2rem !important; 
+        flex-direction: column !important; 
+        align-items: stretch !important;
+        overflow-y: auto !important;
+        overflow-x: hidden !important;
+        max-height: 100% !important;
+    }
+
+    .modal > div:not(.modal-close) > div:nth-child(1) {
+        flex: 0 0 38vh !important; 
+        width: 100% !important; 
+        height: 38vh !important; 
+        max-height: 38vh !important; 
+        display: flex !important; 
+        flex-direction: column !important; 
+        align-items: center !important; 
+        justify-content: center !important;
+        position: relative !important;
+        background: rgba(0,0,0,0.2) !important; 
+        border-radius: 8px !important;
+        padding: 5px !important;
+    }
+
+    .modal > div:not(.modal-close) > div:nth-child(1) > div:first-child {
+        flex: 1 1 auto !important;
+        width: 100% !important;
+        height: 100% !important;
+        min-height: 0 !important; 
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+    }
+
+    /* ✨缩小手机端画廊左右切换按钮 */
+    .gallery-nav-btn {
+        width: 28px !important;
+        height: 28px !important;
+        font-size: 0.85rem !important;
+    }
+
+    /* 手机端覆盖强制拉伸 */
+    .modal .portfolio-img,
+    .modal > div:not(.modal-close) > div:nth-child(1) iframe {
+        width: 100% !important;
+        height: 100% !important;
+        max-height: 100% !important;
+        max-width: 100% !important;
+        object-fit: contain !important; 
+        object-position: center !important; 
+        border-radius: 6px !important;
+        margin: 0 auto !important;
+    }
+
+    .modal > div:not(.modal-close) > div:nth-child(1) a {
+        height: auto !important;
+        flex-shrink: 0 !important;
+    }
+
+    #gallery-counter {
+        position: static !important; 
+        display: inline-block !important;
+        margin: 10px auto 5px auto !important; 
+        background: rgba(0, 210, 255, 0.1) !important;
+        border: 1px solid rgba(0, 210, 255, 0.3) !important;
+        color: var(--accent) !important;
+        padding: 5px 16px !important;
+        border-radius: 20px !important;
+        font-size: 0.75rem !important;
+        letter-spacing: 2px !important;
+        align-self: center !important;
+        flex-shrink: 0 !important;
+    }
+
+    .modal > div:not(.modal-close) > div:nth-child(2) {
+        flex: 1 1 auto !important; 
+        width: 100% !important; 
+        display: flex !important; 
+        flex-direction: column !important;
+    }
+
+    .project-tag-container { font-size: 0.7rem !important; line-height: 1.4 !important; margin-bottom: 0.4rem !important; }
+    .project-title-h2 { font-size: 1.6rem !important; line-height: 1.2 !important; margin-bottom: 0.6rem !important; word-break: break-word !important; }
+    .project-desc-p { font-size: 0.9rem !important; line-height: 1.6 !important; margin-bottom: 1.2rem !important; }
+    .project-meta-details { gap: 1.5rem !important; padding-top: 1.2rem !important; flex-direction: column !important; }
+    .project-meta-details > div { margin-bottom: 0.5rem !important; }
 }
 
-/* --- 多语言纯 CSS 切换魔法 --- */
-html[lang="en"] .lang-zh { 
-    display: none !important; 
+/* ==========================================================================
+   ✨ Multi-Language Pure CSS Toggle Rules
+   ========================================================================== */
+html[lang="en"] .lang-zh { display: none !important; }
+html[lang="zh"] .lang-en { display: none !important; }
+
+/* ==========================================================================
+   ✨ Back to Top Floating Action Button
+   ========================================================================== */
+.back-to-top {
+    position: fixed; bottom: 40px; right: 40px; width: 50px; height: 50px;
+    background: var(--accent); color: #000; border: none; border-radius: 50%;
+    font-size: 1.5rem; cursor: pointer; z-index: 10000 !important; 
+    opacity: 0; visibility: hidden; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    display: flex; justify-content: center; align-items: center; box-shadow: 0 4px 15px rgba(0, 238, 255, 0.3);
 }
 
-html[lang="zh"] .lang-en { 
-    display: none !important; 
+.back-to-top.show { opacity: 1; visibility: visible; transform: translateY(0); }
+.back-to-top:hover { transform: translateY(-5px); box-shadow: 0 8px 25px rgba(0, 238, 255, 0.6); }
+
+@media (max-width: 900px) {
+    .back-to-top { bottom: 25px !important; right: 25px !important; width: 45px !important; height: 45px !important; font-size: 1.3rem !important; }
 }
