@@ -93,7 +93,7 @@
   }
   .btn-accent {
     background: var(--accent); color: #000; border: none; padding: 0.6rem 1.1rem; border-radius: 8px;
-    font-family: 'Syne', sans-serif; font-weight: 800; font-size: 0.8rem; cursor: pointer; letter-spacing: 0.05em;
+    font-family: 'Inter', sans-serif; font-weight: 600; font-size: 0.8rem; cursor: pointer; letter-spacing: 0.05em;
     text-transform: uppercase; transition: all .25s;
   }
   .btn-accent:hover { background: var(--accent-dark); }
@@ -566,6 +566,18 @@ function escapeHtml(str) {
   return String(str).replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
 
+/* Old portfolio.json entries store image paths relative to the SITE ROOT
+   (e.g. "Image/foo.png"), because that's where the public pages live.
+   This admin page lives one folder down at /admin/, so those same relative
+   paths would resolve to /admin/Image/foo.png and 404. Absolute URLs
+   (https://..., blob storage URLs from new uploads) and root-relative
+   paths (starting with "/") are left untouched. */
+function resolveAssetUrl(path) {
+  if (!path) return '';
+  if (/^(https?:)?\/\//i.test(path) || path.startsWith('/')) return path;
+  return '/' + path;
+}
+
 document.getElementById('refreshAnalyticsBtn').addEventListener('click', loadAnalytics);
 
 /* =========================================================
@@ -618,7 +630,7 @@ function renderWorksTable() {
 
   tbody.innerHTML = filtered.map(({ w, idx }) => `
     <tr>
-      <td><img class="thumb" src="${escapeHtml(w.thumbnail || '')}" onerror="this.src='../Image/Logo_Colour.png'"></td>
+      <td><img class="thumb" src="${escapeHtml(resolveAssetUrl(w.thumbnail))}" onerror="this.src='../Image/Logo_Colour.png'"></td>
       <td>${escapeHtml(w.title || '')}</td>
       <td><span class="cat-pill">${catLabels[w.category] || w.category}</span></td>
       <td>${escapeHtml(w.year || '')}</td>
@@ -666,7 +678,7 @@ function editWork(idx) {
   document.getElementById('f-youtube_id').value = w.youtube_id || '';
   document.getElementById('f-figma_link').value = w.figma_link || '';
   document.getElementById('f-thumbnail').value = w.thumbnail || '';
-  document.getElementById('thumbPreview').src = w.thumbnail || '';
+  document.getElementById('thumbPreview').src = resolveAssetUrl(w.thumbnail);
   currentGallery = Array.isArray(w.gallery) ? [...w.gallery] : [];
   renderGalleryGrid();
   openModal(true);
@@ -691,7 +703,7 @@ function renderGalleryGrid() {
   const grid = document.getElementById('galleryGrid');
   grid.innerHTML = currentGallery.map((url, i) => `
     <div class="gallery-item">
-      <img src="${escapeHtml(url)}">
+      <img src="${escapeHtml(resolveAssetUrl(url))}">
       <button type="button" class="rm-btn" onclick="removeGalleryImage(${i})">✕</button>
     </div>
   `).join('');
