@@ -121,6 +121,26 @@
   .row-actions button:hover { color: var(--accent); border-color: var(--accent); }
   .row-actions button.del:hover { color: #ff6b6b; border-color: #ff6b6b; }
 
+  /* ---------- Pagination ---------- */
+  .pagination-bar {
+    display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem;
+    padding: 1rem 0.2rem 0.2rem; font-size: 0.82rem; color: var(--text-muted);
+  }
+  .pagination-left { display: flex; align-items: center; gap: 0.6rem; }
+  .pagination-left select {
+    background: rgba(10,10,10,0.5); border: 1px solid rgba(255,255,255,0.08); color: #fff;
+    padding: 0.35rem 0.6rem; border-radius: 6px; font-family: 'Inter', sans-serif; font-size: 0.82rem;
+  }
+  .pagination-right { display: flex; align-items: center; gap: 0.9rem; }
+  .pagination-right .page-range { white-space: nowrap; }
+  .pagination-nav { display: flex; gap: 0.3rem; }
+  .pagination-nav button {
+    background: none; border: 1px solid var(--border); color: var(--text-muted); width: 30px; height: 30px;
+    border-radius: 7px; cursor: pointer; transition: all .2s; display: inline-flex; align-items: center; justify-content: center;
+  }
+  .pagination-nav button:hover:not(:disabled) { color: var(--accent); border-color: var(--accent); }
+  .pagination-nav button:disabled { opacity: 0.35; cursor: not-allowed; }
+
   /* ---------- Edit modal ---------- */
   .modal-overlay-admin {
     display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.75); backdrop-filter: blur(6px);
@@ -241,6 +261,25 @@
           <tbody id="worksTableBody"></tbody>
         </table>
         <div class="empty-state" id="worksEmptyState" style="display:none;">No works match this filter.</div>
+      </div>
+
+      <div class="pagination-bar">
+        <div class="pagination-left">
+          <span>Rows per page:</span>
+          <select id="pageSizeSelect">
+            <option value="10">10</option>
+            <option value="30">30</option>
+            <option value="50">50</option>
+          </select>
+        </div>
+        <div class="pagination-right">
+          <span class="page-range" id="pageRangeLabel">1–10 of 0</span>
+          <div class="pagination-nav">
+            <button type="button" id="firstPageBtn" title="First page"><i class="bi bi-chevron-bar-left"></i></button>
+            <button type="button" id="prevPageBtn" title="Previous page"><i class="bi bi-chevron-left"></i></button>
+            <button type="button" id="nextPageBtn" title="Next page"><i class="bi bi-chevron-right"></i></button>
+          </div>
+        </div>
       </div>
     </section>
 
@@ -587,6 +626,8 @@ let worksData = [];
 let isDirty = false;
 let editingIndex = null; // null = adding new
 let currentGallery = [];
+let currentPage = 1;
+let pageSize = 10;
 
 function setDirty(dirty) {
   isDirty = dirty;
@@ -628,7 +669,16 @@ function renderWorksTable() {
 
   document.getElementById('worksEmptyState').style.display = filtered.length ? 'none' : 'block';
 
-  tbody.innerHTML = filtered.map(({ w, idx }) => `
+  const total = filtered.length;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  if (currentPage > totalPages) currentPage = totalPages;
+  if (currentPage < 1) currentPage = 1;
+
+  const startIdx = total === 0 ? 0 : (currentPage - 1) * pageSize;
+  const endIdx = Math.min(startIdx + pageSize, total);
+  const pageItems = filtered.slice(startIdx, endIdx);
+
+  tbody.innerHTML = pageItems.map(({ w, idx }) => `
     <tr>
       <td><img class="thumb" src="${escapeHtml(resolveAssetUrl(w.thumbnail))}" onerror="this.src='../Image/Logo_Colour.png'"></td>
       <td>${escapeHtml(w.title || '')}</td>
@@ -643,10 +693,37 @@ function renderWorksTable() {
       </td>
     </tr>
   `).join('');
+
+  const rangeLabel = document.getElementById('pageRangeLabel');
+  if (rangeLabel) {
+    rangeLabel.textContent = total === 0 ? '0 of 0' : `${startIdx + 1}–${endIdx} of ${total}`;
+  }
+  const firstBtn = document.getElementById('firstPageBtn');
+  const prevBtn = document.getElementById('prevPageBtn');
+  const nextBtn = document.getElementById('nextPageBtn');
+  if (firstBtn) firstBtn.disabled = currentPage <= 1;
+  if (prevBtn) prevBtn.disabled = currentPage <= 1;
+  if (nextBtn) nextBtn.disabled = currentPage >= totalPages;
 }
 
-document.getElementById('categoryFilter').addEventListener('change', renderWorksTable);
-document.getElementById('searchInput').addEventListener('input', renderWorksTable);
+document.getElementById('categoryFilter').addEventListener('change', () => { currentPage = 1; renderWorksTable(); });
+document.getElementById('searchInput').addEventListener('input', () => { currentPage = 1; renderWorksTable(); });
+
+const pageSizeSelectEl = document.getElementById('pageSizeSelect');
+if (pageSizeSelectEl) {
+  pageSizeSelectEl.value = String(pageSize);
+  pageSizeSelectEl.addEventListener('change', () => {
+    pageSize = parseInt(pageSizeSelectEl.value, 10) || 10;
+    currentPage = 1;
+    renderWorksTable();
+  });
+}
+const firstPageBtnEl = document.getElementById('firstPageBtn');
+const prevPageBtnEl = document.getElementById('prevPageBtn');
+const nextPageBtnEl = document.getElementById('nextPageBtn');
+if (firstPageBtnEl) firstPageBtnEl.addEventListener('click', () => { currentPage = 1; renderWorksTable(); });
+if (prevPageBtnEl) prevPageBtnEl.addEventListener('click', () => { currentPage -= 1; renderWorksTable(); });
+if (nextPageBtnEl) nextPageBtnEl.addEventListener('click', () => { currentPage += 1; renderWorksTable(); });
 
 function deleteWork(idx) {
   if (!confirm('Delete "' + (worksData[idx].title || 'this work') + '"? This can\'t be undone once you save.')) return;
