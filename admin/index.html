@@ -60,6 +60,9 @@
   }
   .stat-tile .stat-label { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); margin-bottom: 0.5rem; }
   .stat-tile .stat-value { font-family: 'Syne', sans-serif; font-size: 1.8rem; font-weight: 800; color: var(--accent); }
+  /* Duration values ("0:00") use digits+colon only and a plain numeric face —
+     at Syne's heavy display weight, a "0" is easy to misread as a capital "O". */
+  .stat-tile .stat-value.mono { font-family: 'Inter', sans-serif; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: 0.01em; }
 
   .card {
     background: var(--card-bg); border: 1px solid var(--border); border-radius: 16px; padding: 1.5rem;
@@ -69,7 +72,25 @@
   .analytics-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 1.5rem; }
   @media (max-width: 900px) { .analytics-grid { grid-template-columns: 1fr; } }
 
+  .chart-card-header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.6rem; margin-bottom: 0.6rem; }
+  .chart-card-header h3 { margin-bottom: 0; }
+  .chart-legend { display: flex; gap: 1.1rem; font-size: 0.76rem; color: var(--text-muted); }
+  .chart-legend .legend-item { display: inline-flex; align-items: center; gap: 0.4rem; }
+  .chart-legend .legend-swatch { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+
+  .chart-canvas-wrap { position: relative; }
   #trafficChart { width: 100%; height: 220px; display: block; }
+  .chart-tooltip {
+    position: absolute; pointer-events: none; opacity: 0; transition: opacity .12s ease;
+    background: rgba(10,14,20,0.95); border: 1px solid var(--border); border-radius: 8px;
+    padding: 0.55rem 0.75rem; font-size: 0.74rem; color: #fff; white-space: nowrap; z-index: 5;
+    box-shadow: 0 8px 20px rgba(0,0,0,0.45); transform: translate(-50%, -100%);
+  }
+  .chart-tooltip.visible { opacity: 1; }
+  .chart-tooltip .tt-date { color: var(--text-muted); margin-bottom: 0.3rem; font-size: 0.7rem; }
+  .chart-tooltip .tt-row { display: flex; align-items: center; gap: 0.4rem; }
+  .chart-tooltip .tt-row + .tt-row { margin-top: 0.2rem; }
+  .chart-tooltip .tt-dot { width: 6px; height: 6px; border-radius: 50%; display: inline-block; }
 
   .bar-row { display: flex; align-items: center; gap: 0.7rem; margin-bottom: 0.7rem; font-size: 0.82rem; }
   .bar-row .bar-label { flex: 0 0 40%; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -483,12 +504,21 @@ function renderAnalytics(data) {
       <div class="stat-tile"><div class="stat-label">Active Users</div><div class="stat-value">${users.toLocaleString()}</div></div>
       <div class="stat-tile"><div class="stat-label">Page Views</div><div class="stat-value">${views.toLocaleString()}</div></div>
       <div class="stat-tile"><div class="stat-label">Sessions</div><div class="stat-value">${sessions.toLocaleString()}</div></div>
-      <div class="stat-tile"><div class="stat-label">Avg. Session</div><div class="stat-value">${formatDuration(avgDur)}</div></div>
+      <div class="stat-tile"><div class="stat-label">Avg. Session</div><div class="stat-value mono">${formatDuration(avgDur)}</div></div>
     </div>
     <div class="analytics-grid">
       <div class="card">
-        <h3>Users &amp; Page Views Over Time</h3>
-        <canvas id="trafficChart"></canvas>
+        <div class="chart-card-header">
+          <h3>Users &amp; Page Views Over Time</h3>
+          <div class="chart-legend">
+            <span class="legend-item"><i class="legend-swatch" style="background:#00d2ff"></i>Page views</span>
+            <span class="legend-item"><i class="legend-swatch" style="background:#f5a623"></i>Active users</span>
+          </div>
+        </div>
+        <div class="chart-canvas-wrap">
+          <canvas id="trafficChart"></canvas>
+          <div class="chart-tooltip" id="chartTooltip"></div>
+        </div>
       </div>
       <div class="card">
         <h3>Top Pages</h3>
@@ -530,19 +560,32 @@ function renderBarList(containerId, report, labelFn) {
   }).join('');
 }
 
+function parseGaDate(value) {
+  // GA4 "date" dimension values are "YYYYMMDD" strings.
+  const y = Number(value.slice(0, 4));
+  const m = Number(value.slice(4, 6)) - 1;
+  const d = Number(value.slice(6, 8));
+  return new Date(Date.UTC(y, m, d));
+}
+
+function formatShortDate(date) {
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
+}
+
 function drawTrafficChart(report) {
   const canvas = document.getElementById('trafficChart');
+  const tooltip = document.getElementById('chartTooltip');
   if (!canvas) return;
   const rows = (report && report.rows) || [];
   const dpr = window.devicePixelRatio || 1;
-  const cssWidth = canvas.parentElement.clientWidth - 48;
+  const cssWidth = canvas.parentElement.clientWidth;
   const cssHeight = 220;
   canvas.width = cssWidth * dpr;
   canvas.height = cssHeight * dpr;
   canvas.style.width = cssWidth + 'px';
   canvas.style.height = cssHeight + 'px';
   const ctx = canvas.getContext('2d');
-  ctx.scale(dpr, dpr);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, cssWidth, cssHeight);
 
   if (rows.length === 0) {
@@ -552,53 +595,117 @@ function drawTrafficChart(report) {
     return;
   }
 
-  const values = rows.map(r => Number(r.metricValues[1].value) || 0); // pageviews
-  const max = Math.max(...values, 1);
-  const padding = 20;
-  const w = cssWidth - padding * 2;
-  const h = cssHeight - padding * 2;
-  const stepX = w / Math.max(values.length - 1, 1);
+  // Two series: page views (primary/filled) and active users (secondary line).
+  const viewsValues = rows.map(r => Number(r.metricValues[1].value) || 0);
+  const usersValues = rows.map(r => Number(r.metricValues[0].value) || 0);
+  const dates = rows.map(r => parseGaDate(r.dimensionValues[0].value));
+  const max = Math.max(...viewsValues, ...usersValues, 1);
 
-  // gridlines
-  ctx.strokeStyle = 'rgba(255,255,255,0.06)';
-  ctx.lineWidth = 1;
-  for (let i = 0; i <= 3; i++) {
-    const y = padding + (h / 3) * i;
-    ctx.beginPath(); ctx.moveTo(padding, y); ctx.lineTo(cssWidth - padding, y); ctx.stroke();
+  const padLeft = 36, padRight = 12, padTop = 14, padBottom = 22;
+  const w = cssWidth - padLeft - padRight;
+  const h = cssHeight - padTop - padBottom;
+  const stepX = w / Math.max(viewsValues.length - 1, 1);
+  const ySteps = 3;
+  const xAt = (i) => padLeft + i * stepX;
+  const yAt = (v) => padTop + h - (v / max) * h;
+  // Label the first, middle and last day so the timeline reads without crowding.
+  const labelIdxs = dates.length > 1 ? [0, Math.floor((dates.length - 1) / 2), dates.length - 1] : [0];
+
+  function drawSeries(values, color, fill) {
+    if (fill) {
+      const grad = ctx.createLinearGradient(0, padTop, 0, padTop + h);
+      grad.addColorStop(0, color + '59'); // ~35% alpha
+      grad.addColorStop(1, color + '00');
+      ctx.beginPath();
+      values.forEach((v, i) => { const x = xAt(i), y = yAt(v); i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y); });
+      ctx.lineTo(xAt(values.length - 1), padTop + h);
+      ctx.lineTo(xAt(0), padTop + h);
+      ctx.closePath();
+      ctx.fillStyle = grad;
+      ctx.fill();
+    }
+    ctx.beginPath();
+    values.forEach((v, i) => { const x = xAt(i), y = yAt(v); i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y); });
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2;
+    ctx.lineJoin = 'round';
+    ctx.stroke();
   }
 
-  // area fill
-  const grad = ctx.createLinearGradient(0, padding, 0, padding + h);
-  grad.addColorStop(0, 'rgba(0,210,255,0.35)');
-  grad.addColorStop(1, 'rgba(0,210,255,0)');
-  ctx.beginPath();
-  values.forEach((v, i) => {
-    const x = padding + i * stepX;
-    const y = padding + h - (v / max) * h;
-    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
-  });
-  ctx.lineTo(padding + (values.length - 1) * stepX, padding + h);
-  ctx.lineTo(padding, padding + h);
-  ctx.closePath();
-  ctx.fillStyle = grad;
-  ctx.fill();
+  function drawBase() {
+    ctx.clearRect(0, 0, cssWidth, cssHeight);
+    ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+    ctx.fillStyle = '#8892b0';
+    ctx.font = '11px Inter';
+    for (let i = 0; i <= ySteps; i++) {
+      const y = padTop + (h / ySteps) * i;
+      ctx.beginPath(); ctx.moveTo(padLeft, y); ctx.lineTo(cssWidth - padRight, y); ctx.stroke();
+      const val = Math.round(max - (max / ySteps) * i);
+      ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+      ctx.fillText(val.toLocaleString(), padLeft - 8, y);
+    }
+    ctx.textBaseline = 'alphabetic';
+    labelIdxs.forEach((i, pos) => {
+      // Anchor the first/last labels inward so they never clip past the canvas edge.
+      ctx.textAlign = pos === 0 ? 'left' : (pos === labelIdxs.length - 1 ? 'right' : 'center');
+      ctx.fillText(formatShortDate(dates[i]), xAt(i), cssHeight - 6);
+    });
+    drawSeries(viewsValues, '#00d2ff', true);
+    drawSeries(usersValues, '#f5a623', false);
+  }
 
-  // line
-  ctx.beginPath();
-  values.forEach((v, i) => {
-    const x = padding + i * stepX;
-    const y = padding + h - (v / max) * h;
-    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
-  });
-  ctx.strokeStyle = '#00d2ff';
-  ctx.lineWidth = 2;
-  ctx.stroke();
+  drawBase();
+
+  function pointerIndex(px) {
+    const clamped = Math.min(Math.max(px - padLeft, 0), w);
+    return Math.round(clamped / stepX);
+  }
+
+  canvas.onmousemove = (e) => {
+    const rect = canvas.getBoundingClientRect();
+    const i = pointerIndex(e.clientX - rect.left);
+    drawBase();
+
+    const x = xAt(i);
+    ctx.beginPath();
+    ctx.moveTo(x, padTop);
+    ctx.lineTo(x, padTop + h);
+    ctx.strokeStyle = 'rgba(255,255,255,0.18)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    [['#00d2ff', viewsValues], ['#f5a623', usersValues]].forEach(([color, series]) => {
+      ctx.beginPath();
+      ctx.arc(x, yAt(series[i]), 3.5, 0, Math.PI * 2);
+      ctx.fillStyle = color;
+      ctx.fill();
+    });
+
+    if (tooltip) {
+      tooltip.innerHTML = `
+        <div class="tt-date">${formatShortDate(dates[i])}</div>
+        <div class="tt-row"><i class="tt-dot" style="background:#00d2ff"></i>Page views: ${viewsValues[i].toLocaleString()}</div>
+        <div class="tt-row"><i class="tt-dot" style="background:#f5a623"></i>Active users: ${usersValues[i].toLocaleString()}</div>
+      `;
+      const topY = Math.min(yAt(viewsValues[i]), yAt(usersValues[i]));
+      tooltip.style.left = Math.min(Math.max(x, 60), cssWidth - 60) + 'px';
+      tooltip.style.top = Math.max(topY - 10, 10) + 'px';
+      tooltip.classList.add('visible');
+    }
+  };
+
+  canvas.onmouseleave = () => {
+    drawBase();
+    if (tooltip) tooltip.classList.remove('visible');
+  };
 }
 
 function formatDuration(seconds) {
-  const m = Math.floor(seconds / 60);
-  const s = Math.round(seconds % 60);
-  return `${m}m ${s}s`;
+  // Plain "m:ss" — digits + a colon only, so there's no letter for a "0"
+  // digit to accidentally spell a word with (see the .mono stat-value class).
+  const total = Math.max(0, Math.round(seconds));
+  const m = Math.floor(total / 60);
+  const s = total % 60;
+  return `${m}:${String(s).padStart(2, '0')}`;
 }
 
 function escapeHtml(str) {
