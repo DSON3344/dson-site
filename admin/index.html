@@ -1,16 +1,832 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>DSON Admin | Content Management</title>
-  <link rel="icon" type="image/png" href="Image/DSON logo.png">
-  
-  <!-- Include the Netlify Identity widget for secure authentication -->
-  <script src="https://identity.netlify.com/v1/netlify-identity-widget.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow">
+<title>Admin Dashboard | DSON</title>
+<link rel="icon" type="image/png" href="../Image/DSON logo.png">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=Inter:wght@300;400;500;600&family=Noto+Sans+SC:wght@300;400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+<link rel="stylesheet" href="../DSON.css">
+<style>
+  body { padding-bottom: 4rem; }
+  #authGate {
+    position: fixed; inset: 0; background: var(--black);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 9999; color: var(--text-muted); font-size: 0.9rem;
+  }
+
+  /* ---------- Top bar ---------- */
+  .admin-topbar {
+    position: sticky; top: 0; z-index: 50;
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 1rem; flex-wrap: wrap;
+    padding: 1rem 4vw;
+    background: rgba(8,10,15,0.85);
+    backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+    border-bottom: 1px solid var(--border);
+  }
+  .admin-brand { display: flex; align-items: center; gap: 0.7rem; }
+  .admin-brand img { height: 28px; }
+  .admin-brand span { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 1rem; }
+  .admin-tabs { display: flex; gap: 0.4rem; background: rgba(255,255,255,0.03); padding: 4px; border-radius: 10px; border: 1px solid var(--border); }
+  .admin-tab-btn {
+    background: none; border: none; color: var(--text-muted); font-family: 'Inter', sans-serif;
+    font-size: 0.82rem; font-weight: 600; padding: 0.5rem 1rem; border-radius: 8px; cursor: pointer; transition: all .25s;
+  }
+  .admin-tab-btn.active { background: var(--accent); color: #000; }
+  .admin-actions { display: flex; align-items: center; gap: 0.7rem; }
+  .icon-btn {
+    display: inline-flex; align-items: center; gap: 0.4rem;
+    background: rgba(255,255,255,0.04); border: 1px solid var(--border); color: var(--text-muted);
+    padding: 0.5rem 0.9rem; border-radius: 8px; font-size: 0.8rem; text-decoration: none; cursor: pointer;
+    transition: all .25s; font-family: 'Inter', sans-serif;
+  }
+  .icon-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .icon-btn.danger:hover { border-color: #ff6b6b; color: #ff6b6b; }
+
+  .admin-main { padding: 2rem 4vw; max-width: 1400px; margin: 0 auto; }
+  .panel { display: none; }
+  .panel.active { display: block; }
+
+  .section-title-row { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem; margin-bottom: 1.5rem; }
+  .section-title-row h2 { font-family: 'Syne', sans-serif; font-size: 1.3rem; font-weight: 800; }
+
+  /* ---------- Stat tiles ---------- */
+  .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
+  .stat-tile {
+    background: var(--card-bg); border: 1px solid var(--border); border-radius: 14px; padding: 1.2rem 1.4rem;
+  }
+  .stat-tile .stat-label { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); margin-bottom: 0.5rem; }
+  .stat-tile .stat-value { font-family: 'Syne', sans-serif; font-size: 1.8rem; font-weight: 800; color: var(--accent); }
+
+  .card {
+    background: var(--card-bg); border: 1px solid var(--border); border-radius: 16px; padding: 1.5rem;
+    margin-bottom: 1.5rem;
+  }
+  .card h3 { font-family: 'Syne', sans-serif; font-size: 1rem; font-weight: 700; margin-bottom: 1rem; }
+  .analytics-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 1.5rem; }
+  @media (max-width: 900px) { .analytics-grid { grid-template-columns: 1fr; } }
+
+  #trafficChart { width: 100%; height: 220px; display: block; }
+
+  .bar-row { display: flex; align-items: center; gap: 0.7rem; margin-bottom: 0.7rem; font-size: 0.82rem; }
+  .bar-row .bar-label { flex: 0 0 40%; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .bar-row .bar-track { flex: 1; background: rgba(255,255,255,0.05); border-radius: 6px; height: 10px; overflow: hidden; }
+  .bar-row .bar-fill { height: 100%; background: linear-gradient(90deg, var(--accent-dark), var(--accent)); border-radius: 6px; }
+  .bar-row .bar-value { flex: 0 0 auto; color: #fff; font-weight: 600; min-width: 2.5em; text-align: right; }
+
+  .ga-setup-notice {
+    text-align: center; padding: 3rem 1.5rem; color: var(--text-muted);
+  }
+  .ga-setup-notice i { font-size: 2.2rem; color: var(--accent); margin-bottom: 1rem; display: block; }
+  .ga-setup-notice code {
+    background: rgba(255,255,255,0.06); padding: 0.15rem 0.5rem; border-radius: 5px; color: var(--accent); font-size: 0.85em;
+  }
+
+  /* ---------- Portfolio manager ---------- */
+  .toolbar { display: flex; gap: 0.8rem; flex-wrap: wrap; align-items: center; margin-bottom: 1.5rem; }
+  .toolbar select, .toolbar input[type="text"] {
+    background: rgba(10,10,10,0.5); border: 1px solid rgba(255,255,255,0.08); color: #fff;
+    padding: 0.55rem 0.8rem; border-radius: 8px; font-family: 'Inter', sans-serif; font-size: 0.85rem;
+  }
+  .btn-accent {
+    background: var(--accent); color: #000; border: none; padding: 0.6rem 1.1rem; border-radius: 8px;
+    font-family: 'Syne', sans-serif; font-weight: 800; font-size: 0.8rem; cursor: pointer; letter-spacing: 0.05em;
+    text-transform: uppercase; transition: all .25s;
+  }
+  .btn-accent:hover { background: var(--accent-dark); }
+  .btn-accent:disabled { opacity: 0.5; cursor: not-allowed; }
+  .save-indicator { font-size: 0.8rem; color: var(--text-muted); }
+  .save-indicator.dirty { color: #ffb020; }
+  .save-indicator.saved { color: #4ade80; }
+
+  .works-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+  .works-table th {
+    text-align: left; color: var(--text-muted); font-weight: 600; font-size: 0.72rem;
+    text-transform: uppercase; letter-spacing: 0.06em; padding: 0.6rem 0.8rem; border-bottom: 1px solid var(--border);
+  }
+  .works-table td { padding: 0.7rem 0.8rem; border-bottom: 1px solid rgba(255,255,255,0.05); vertical-align: middle; }
+  .works-table img.thumb { width: 56px; height: 40px; object-fit: cover; border-radius: 6px; background: #000; }
+  .cat-pill {
+    display: inline-block; font-size: 0.68rem; padding: 0.2rem 0.55rem; border-radius: 20px;
+    background: rgba(0,210,255,0.1); color: var(--accent); text-transform: uppercase; letter-spacing: 0.05em;
+  }
+  .row-actions { display: flex; gap: 0.5rem; }
+  .row-actions button {
+    background: none; border: 1px solid var(--border); color: var(--text-muted); width: 30px; height: 30px;
+    border-radius: 7px; cursor: pointer; transition: all .2s;
+  }
+  .row-actions button:hover { color: var(--accent); border-color: var(--accent); }
+  .row-actions button.del:hover { color: #ff6b6b; border-color: #ff6b6b; }
+
+  /* ---------- Edit modal ---------- */
+  .modal-overlay-admin {
+    display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.75); backdrop-filter: blur(6px);
+    z-index: 200; align-items: flex-start; justify-content: center; overflow-y: auto; padding: 3rem 1rem;
+  }
+  .modal-overlay-admin.open { display: flex; }
+  .edit-modal {
+    background: var(--card-bg); border: 1px solid var(--border); border-radius: 18px; padding: 2rem;
+    width: 100%; max-width: 640px; box-shadow: 0 30px 70px rgba(0,0,0,0.5);
+  }
+  .edit-modal h3 { font-family: 'Syne', sans-serif; font-size: 1.15rem; margin-bottom: 1.4rem; }
+  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+  .form-grid .full { grid-column: 1 / -1; }
+  .form-field label { display: block; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); margin-bottom: 0.35rem; }
+  .form-field input, .form-field select, .form-field textarea {
+    width: 100%; background: rgba(10,10,10,0.5); border: 1px solid rgba(255,255,255,0.08); color: #fff;
+    padding: 0.6rem 0.8rem; border-radius: 8px; font-family: 'Inter', sans-serif; font-size: 0.85rem; resize: vertical;
+  }
+  .form-field input:focus, .form-field select:focus, .form-field textarea:focus { outline: none; border-color: var(--accent); }
+  .form-field { margin-bottom: 0.9rem; }
+
+  .thumb-upload-box {
+    display: flex; align-items: center; gap: 1rem; margin-top: 0.4rem;
+  }
+  .thumb-preview { width: 90px; height: 60px; object-fit: cover; border-radius: 8px; background: rgba(255,255,255,0.05); border: 1px solid var(--border); }
+  .gallery-grid { display: flex; flex-wrap: wrap; gap: 0.6rem; margin-top: 0.5rem; }
+  .gallery-item { position: relative; width: 74px; height: 54px; }
+  .gallery-item img { width: 100%; height: 100%; object-fit: cover; border-radius: 6px; border: 1px solid var(--border); }
+  .gallery-item .rm-btn {
+    position: absolute; top: -6px; right: -6px; width: 18px; height: 18px; border-radius: 50%;
+    background: #ff4d4d; color: #fff; border: none; font-size: 0.65rem; cursor: pointer; line-height: 18px;
+  }
+  .modal-footer { display: flex; justify-content: flex-end; gap: 0.7rem; margin-top: 1.5rem; }
+  .btn-ghost {
+    background: transparent; border: 1px solid var(--border); color: var(--text-muted); padding: 0.6rem 1.1rem;
+    border-radius: 8px; cursor: pointer; font-size: 0.82rem;
+  }
+  .btn-ghost:hover { color: #fff; }
+  .toast {
+    position: fixed; bottom: 1.5rem; left: 50%; transform: translateX(-50%) translateY(20px);
+    background: var(--card-bg); border: 1px solid var(--accent); color: #fff; padding: 0.8rem 1.4rem;
+    border-radius: 10px; font-size: 0.85rem; z-index: 300; opacity: 0; pointer-events: none; transition: all .3s;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  .toast.error { border-color: #ff6b6b; }
+  .empty-state { text-align: center; color: var(--text-muted); padding: 3rem 1rem; font-size: 0.9rem; }
+</style>
 </head>
 <body>
-  <!-- Include the script that builds the UI and powers Decap CMS -->
-  <script src="https://unpkg.com/decap-cms@^3.0.0/dist/decap-cms.js"></script>
+
+<div id="authGate">Checking session…</div>
+
+<div id="dashboardRoot" style="display:none;">
+
+  <div class="admin-topbar">
+    <div class="admin-brand">
+      <img src="../Image/Logo_Colour.png" alt="DSON">
+      <span>Admin Dashboard</span>
+    </div>
+    <div class="admin-tabs">
+      <button class="admin-tab-btn active" data-tab="analytics">Analytics</button>
+      <button class="admin-tab-btn" data-tab="portfolio">Portfolio Works</button>
+    </div>
+    <div class="admin-actions">
+      <a href="../portfolio.html" target="_blank" class="icon-btn"><i class="bi bi-box-arrow-up-right"></i> View Site</a>
+      <button class="icon-btn danger" id="logoutBtn"><i class="bi bi-box-arrow-right"></i> Log Out</button>
+    </div>
+  </div>
+
+  <main class="admin-main">
+
+    <!-- ================= ANALYTICS PANEL ================= -->
+    <section class="panel active" id="panel-analytics">
+      <div class="section-title-row">
+        <h2>Traffic Analytics <span style="color:var(--text-muted); font-weight:400; font-size:0.75rem;">(last 30 days)</span></h2>
+        <button class="icon-btn" id="refreshAnalyticsBtn"><i class="bi bi-arrow-clockwise"></i> Refresh</button>
+      </div>
+
+      <div id="analyticsContent">
+        <div class="empty-state">Loading analytics…</div>
+      </div>
+    </section>
+
+    <!-- ================= PORTFOLIO PANEL ================= -->
+    <section class="panel" id="panel-portfolio">
+      <div class="section-title-row">
+        <h2>Portfolio Works</h2>
+        <span class="save-indicator" id="saveIndicator">All changes saved</span>
+      </div>
+
+      <div class="toolbar">
+        <select id="categoryFilter">
+          <option value="all">All Categories</option>
+          <option value="uiux">UI/UX</option>
+          <option value="video">Video</option>
+          <option value="photo">Photo Editing</option>
+          <option value="manipulation">Image Manipulation</option>
+          <option value="3d">3D Modeling</option>
+          <option value="graphic">Graphic Design</option>
+        </select>
+        <input type="text" id="searchInput" placeholder="Search by title...">
+        <button class="btn-accent" id="addWorkBtn"><i class="bi bi-plus-lg"></i> Add New Work</button>
+        <button class="btn-accent" id="saveAllBtn" style="background:#4ade80;"><i class="bi bi-cloud-arrow-up"></i> Save Changes</button>
+      </div>
+
+      <div style="overflow-x:auto;">
+        <table class="works-table">
+          <thead>
+            <tr>
+              <th>Thumbnail</th>
+              <th>Title</th>
+              <th>Category</th>
+              <th>Year</th>
+              <th>Client</th>
+              <th style="text-align:right;">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="worksTableBody"></tbody>
+        </table>
+        <div class="empty-state" id="worksEmptyState" style="display:none;">No works match this filter.</div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<!-- ================= ADD/EDIT MODAL ================= -->
+<div class="modal-overlay-admin" id="editModalOverlay">
+  <div class="edit-modal">
+    <h3 id="modalTitle">Add New Work</h3>
+    <form id="workForm">
+      <div class="form-grid">
+        <div class="form-field">
+          <label>Category *</label>
+          <select id="f-category" required>
+            <option value="uiux">UI/UX</option>
+            <option value="video">Video</option>
+            <option value="photo">Photo Editing</option>
+            <option value="manipulation">Image Manipulation</option>
+            <option value="3d">3D Modeling</option>
+            <option value="graphic">Graphic Design</option>
+          </select>
+        </div>
+        <div class="form-field">
+          <label>Year *</label>
+          <input type="text" id="f-year" placeholder="2026" required>
+        </div>
+
+        <div class="form-field">
+          <label>Title (EN) *</label>
+          <input type="text" id="f-title" required>
+        </div>
+        <div class="form-field">
+          <label>标题 (中文)</label>
+          <input type="text" id="f-title_zh">
+        </div>
+
+        <div class="form-field full">
+          <label>Description (EN) *</label>
+          <textarea id="f-description" rows="2" required></textarea>
+        </div>
+        <div class="form-field full">
+          <label>描述 (中文)</label>
+          <textarea id="f-description_zh" rows="2"></textarea>
+        </div>
+
+        <div class="form-field">
+          <label>Tools *</label>
+          <input type="text" id="f-tools" placeholder="Adobe Photoshop" required>
+        </div>
+        <div class="form-field">
+          <label>Client / Project Type (EN) *</label>
+          <input type="text" id="f-client" required>
+        </div>
+        <div class="form-field full">
+          <label>客户/项目类型 (中文)</label>
+          <input type="text" id="f-client_zh">
+        </div>
+
+        <div class="form-field">
+          <label>YouTube Video ID <span style="opacity:.6;">(optional)</span></label>
+          <input type="text" id="f-youtube_id" placeholder="e.g. mwwu9w_wWsA">
+        </div>
+        <div class="form-field">
+          <label>Figma Prototype Link <span style="opacity:.6;">(optional)</span></label>
+          <input type="text" id="f-figma_link" placeholder="https://www.figma.com/proto/...">
+        </div>
+
+        <div class="form-field full">
+          <label>Thumbnail Image *</label>
+          <div class="thumb-upload-box">
+            <img id="thumbPreview" class="thumb-preview" src="" alt="">
+            <div>
+              <input type="file" id="thumbFileInput" accept="image/*" style="display:none;">
+              <button type="button" class="icon-btn" id="thumbUploadBtn"><i class="bi bi-upload"></i> Upload Image</button>
+              <div id="thumbUploadStatus" style="font-size:0.72rem; color:var(--text-muted); margin-top:0.3rem;"></div>
+            </div>
+          </div>
+          <input type="hidden" id="f-thumbnail">
+        </div>
+
+        <div class="form-field full">
+          <label>Gallery Images <span style="opacity:.6;">(optional, for photo/3D/graphic slideshows)</span></label>
+          <div class="gallery-grid" id="galleryGrid"></div>
+          <input type="file" id="galleryFileInput" accept="image/*" style="display:none;">
+          <button type="button" class="icon-btn" id="galleryUploadBtn" style="margin-top:0.6rem;"><i class="bi bi-images"></i> Add Gallery Image</button>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn-ghost" id="cancelModalBtn">Cancel</button>
+        <button type="submit" class="btn-accent">Save Work</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* =========================================================
+   0. Auth gate
+   ========================================================= */
+(async function authGate() {
+  try {
+    const resp = await fetch('/api/admin/me');
+    const data = await resp.json();
+    if (!data.authenticated) {
+      window.location.href = 'login.html';
+      return;
+    }
+    document.getElementById('authGate').style.display = 'none';
+    document.getElementById('dashboardRoot').style.display = 'block';
+    initDashboard();
+  } catch (err) {
+    window.location.href = 'login.html';
+  }
+})();
+
+document.getElementById('logoutBtn').addEventListener('click', async () => {
+  await fetch('/api/admin/logout', { method: 'POST' });
+  window.location.href = 'login.html';
+});
+
+/* =========================================================
+   1. Tabs
+   ========================================================= */
+document.querySelectorAll('.admin-tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.admin-tab-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+    document.getElementById('panel-' + btn.dataset.tab).classList.add('active');
+    if (btn.dataset.tab === 'analytics') loadAnalytics();
+  });
+});
+
+/* =========================================================
+   2. Toast helper
+   ========================================================= */
+function showToast(msg, isError) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show' + (isError ? ' error' : '');
+  setTimeout(() => { t.className = 'toast'; }, 3200);
+}
+
+/* =========================================================
+   3. Analytics
+   ========================================================= */
+let analyticsLoaded = false;
+
+async function loadAnalytics() {
+  const el = document.getElementById('analyticsContent');
+  el.innerHTML = '<div class="empty-state">Loading analytics…</div>';
+  try {
+    const resp = await fetch('/api/admin/analytics');
+    const data = await resp.json();
+
+    if (!data.configured) {
+      el.innerHTML = `
+        <div class="ga-setup-notice">
+          <i class="bi bi-bar-chart-line"></i>
+          <h3 style="color:#fff; margin-bottom:0.6rem; font-family:'Syne',sans-serif;">Google Analytics not connected yet</h3>
+          <p style="max-width:480px; margin:0 auto 1rem;">
+            Add <code>GA_PROPERTY_ID</code>, <code>GA_CLIENT_EMAIL</code> and <code>GA_PRIVATE_KEY</code>
+            as environment variables in your Vercel project, then refresh this page to see real traffic data here.
+          </p>
+        </div>`;
+      return;
+    }
+
+    if (data.error) {
+      el.innerHTML = `<div class="ga-setup-notice"><i class="bi bi-exclamation-triangle"></i>
+        <h3 style="color:#fff;">Couldn't load analytics</h3><p>${escapeHtml(data.error)}</p></div>`;
+      return;
+    }
+
+    renderAnalytics(data);
+  } catch (err) {
+    el.innerHTML = '<div class="ga-setup-notice"><i class="bi bi-exclamation-triangle"></i><p>Network error loading analytics.</p></div>';
+  }
+}
+
+function gaVal(report, rowIndex, metricIndex) {
+  try { return Number(report.rows[rowIndex].metricValues[metricIndex].value) || 0; }
+  catch { return 0; }
+}
+
+function renderAnalytics(data) {
+  const el = document.getElementById('analyticsContent');
+  const s = data.summary;
+  const hasSummaryRow = s.rows && s.rows.length > 0;
+  const users = hasSummaryRow ? gaVal(s, 0, 0) : 0;
+  const views = hasSummaryRow ? gaVal(s, 0, 1) : 0;
+  const sessions = hasSummaryRow ? gaVal(s, 0, 2) : 0;
+  const avgDur = hasSummaryRow ? gaVal(s, 0, 3) : 0;
+
+  el.innerHTML = `
+    <div class="stat-grid">
+      <div class="stat-tile"><div class="stat-label">Active Users</div><div class="stat-value">${users.toLocaleString()}</div></div>
+      <div class="stat-tile"><div class="stat-label">Page Views</div><div class="stat-value">${views.toLocaleString()}</div></div>
+      <div class="stat-tile"><div class="stat-label">Sessions</div><div class="stat-value">${sessions.toLocaleString()}</div></div>
+      <div class="stat-tile"><div class="stat-label">Avg. Session</div><div class="stat-value">${formatDuration(avgDur)}</div></div>
+    </div>
+    <div class="analytics-grid">
+      <div class="card">
+        <h3>Users &amp; Page Views Over Time</h3>
+        <canvas id="trafficChart"></canvas>
+      </div>
+      <div class="card">
+        <h3>Top Pages</h3>
+        <div id="topPagesList"></div>
+      </div>
+      <div class="card">
+        <h3>Device Breakdown</h3>
+        <div id="deviceList"></div>
+      </div>
+      <div class="card">
+        <h3>Top Countries</h3>
+        <div id="countryList"></div>
+      </div>
+    </div>
+  `;
+
+  drawTrafficChart(data.byDate);
+  renderBarList('topPagesList', data.topPages, (row) => row.dimensionValues[0].value.replace(/\.html$/, '') || '/');
+  renderBarList('deviceList', data.devices, (row) => row.dimensionValues[0].value);
+  renderBarList('countryList', data.countries, (row) => row.dimensionValues[0].value);
+}
+
+function renderBarList(containerId, report, labelFn) {
+  const container = document.getElementById(containerId);
+  const rows = (report && report.rows) || [];
+  if (rows.length === 0) {
+    container.innerHTML = '<div class="empty-state" style="padding:1rem;">No data yet</div>';
+    return;
+  }
+  const max = Math.max(...rows.map(r => Number(r.metricValues[0].value) || 0), 1);
+  container.innerHTML = rows.map(r => {
+    const val = Number(r.metricValues[0].value) || 0;
+    const pct = Math.max(4, Math.round((val / max) * 100));
+    return `<div class="bar-row">
+      <div class="bar-label" title="${escapeHtml(labelFn(r))}">${escapeHtml(labelFn(r))}</div>
+      <div class="bar-track"><div class="bar-fill" style="width:${pct}%"></div></div>
+      <div class="bar-value">${val.toLocaleString()}</div>
+    </div>`;
+  }).join('');
+}
+
+function drawTrafficChart(report) {
+  const canvas = document.getElementById('trafficChart');
+  if (!canvas) return;
+  const rows = (report && report.rows) || [];
+  const dpr = window.devicePixelRatio || 1;
+  const cssWidth = canvas.parentElement.clientWidth - 48;
+  const cssHeight = 220;
+  canvas.width = cssWidth * dpr;
+  canvas.height = cssHeight * dpr;
+  canvas.style.width = cssWidth + 'px';
+  canvas.style.height = cssHeight + 'px';
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+  ctx.clearRect(0, 0, cssWidth, cssHeight);
+
+  if (rows.length === 0) {
+    ctx.fillStyle = '#8892b0';
+    ctx.font = '13px Inter';
+    ctx.fillText('No data yet', 10, cssHeight / 2);
+    return;
+  }
+
+  const values = rows.map(r => Number(r.metricValues[1].value) || 0); // pageviews
+  const max = Math.max(...values, 1);
+  const padding = 20;
+  const w = cssWidth - padding * 2;
+  const h = cssHeight - padding * 2;
+  const stepX = w / Math.max(values.length - 1, 1);
+
+  // gridlines
+  ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+  ctx.lineWidth = 1;
+  for (let i = 0; i <= 3; i++) {
+    const y = padding + (h / 3) * i;
+    ctx.beginPath(); ctx.moveTo(padding, y); ctx.lineTo(cssWidth - padding, y); ctx.stroke();
+  }
+
+  // area fill
+  const grad = ctx.createLinearGradient(0, padding, 0, padding + h);
+  grad.addColorStop(0, 'rgba(0,210,255,0.35)');
+  grad.addColorStop(1, 'rgba(0,210,255,0)');
+  ctx.beginPath();
+  values.forEach((v, i) => {
+    const x = padding + i * stepX;
+    const y = padding + h - (v / max) * h;
+    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+  });
+  ctx.lineTo(padding + (values.length - 1) * stepX, padding + h);
+  ctx.lineTo(padding, padding + h);
+  ctx.closePath();
+  ctx.fillStyle = grad;
+  ctx.fill();
+
+  // line
+  ctx.beginPath();
+  values.forEach((v, i) => {
+    const x = padding + i * stepX;
+    const y = padding + h - (v / max) * h;
+    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+  });
+  ctx.strokeStyle = '#00d2ff';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+}
+
+function formatDuration(seconds) {
+  const m = Math.floor(seconds / 60);
+  const s = Math.round(seconds % 60);
+  return `${m}m ${s}s`;
+}
+
+function escapeHtml(str) {
+  return String(str).replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+document.getElementById('refreshAnalyticsBtn').addEventListener('click', loadAnalytics);
+
+/* =========================================================
+   4. Portfolio works manager
+   ========================================================= */
+let worksData = [];
+let isDirty = false;
+let editingIndex = null; // null = adding new
+let currentGallery = [];
+
+function setDirty(dirty) {
+  isDirty = dirty;
+  const ind = document.getElementById('saveIndicator');
+  if (dirty) {
+    ind.textContent = 'Unsaved changes';
+    ind.className = 'save-indicator dirty';
+  } else {
+    ind.textContent = 'All changes saved';
+    ind.className = 'save-indicator saved';
+  }
+}
+
+async function loadWorks() {
+  try {
+    const resp = await fetch('/api/portfolio');
+    const data = await resp.json();
+    worksData = (data && data.works) || [];
+    renderWorksTable();
+  } catch (err) {
+    showToast('Failed to load portfolio data.', true);
+  }
+}
+
+const catLabels = {
+  uiux: 'UI/UX', video: 'Video', photo: 'Photo Editing',
+  manipulation: 'Image Manipulation', '3d': '3D Modeling', graphic: 'Graphic Design'
+};
+
+function renderWorksTable() {
+  const tbody = document.getElementById('worksTableBody');
+  const filterCat = document.getElementById('categoryFilter').value;
+  const search = document.getElementById('searchInput').value.trim().toLowerCase();
+
+  const filtered = worksData
+    .map((w, idx) => ({ w, idx }))
+    .filter(({ w }) => (filterCat === 'all' || w.category === filterCat))
+    .filter(({ w }) => !search || (w.title || '').toLowerCase().includes(search) || (w.title_zh || '').toLowerCase().includes(search));
+
+  document.getElementById('worksEmptyState').style.display = filtered.length ? 'none' : 'block';
+
+  tbody.innerHTML = filtered.map(({ w, idx }) => `
+    <tr>
+      <td><img class="thumb" src="${escapeHtml(w.thumbnail || '')}" onerror="this.src='../Image/Logo_Colour.png'"></td>
+      <td>${escapeHtml(w.title || '')}</td>
+      <td><span class="cat-pill">${catLabels[w.category] || w.category}</span></td>
+      <td>${escapeHtml(w.year || '')}</td>
+      <td>${escapeHtml(w.client || '')}</td>
+      <td>
+        <div class="row-actions" style="justify-content:flex-end;">
+          <button onclick="editWork(${idx})" title="Edit"><i class="bi bi-pencil"></i></button>
+          <button class="del" onclick="deleteWork(${idx})" title="Delete"><i class="bi bi-trash"></i></button>
+        </div>
+      </td>
+    </tr>
+  `).join('');
+}
+
+document.getElementById('categoryFilter').addEventListener('change', renderWorksTable);
+document.getElementById('searchInput').addEventListener('input', renderWorksTable);
+
+function deleteWork(idx) {
+  if (!confirm('Delete "' + (worksData[idx].title || 'this work') + '"? This can\'t be undone once you save.')) return;
+  worksData.splice(idx, 1);
+  renderWorksTable();
+  setDirty(true);
+}
+
+function openModal(isEdit) {
+  document.getElementById('modalTitle').textContent = isEdit ? 'Edit Work' : 'Add New Work';
+  document.getElementById('editModalOverlay').classList.add('open');
+}
+function closeModal() {
+  document.getElementById('editModalOverlay').classList.remove('open');
+}
+
+function editWork(idx) {
+  editingIndex = idx;
+  const w = worksData[idx];
+  document.getElementById('f-category').value = w.category || 'uiux';
+  document.getElementById('f-year').value = w.year || '';
+  document.getElementById('f-title').value = w.title || '';
+  document.getElementById('f-title_zh').value = w.title_zh || '';
+  document.getElementById('f-description').value = w.description || '';
+  document.getElementById('f-description_zh').value = w.description_zh || '';
+  document.getElementById('f-tools').value = w.tools || '';
+  document.getElementById('f-client').value = w.client || '';
+  document.getElementById('f-client_zh').value = w.client_zh || '';
+  document.getElementById('f-youtube_id').value = w.youtube_id || '';
+  document.getElementById('f-figma_link').value = w.figma_link || '';
+  document.getElementById('f-thumbnail').value = w.thumbnail || '';
+  document.getElementById('thumbPreview').src = w.thumbnail || '';
+  currentGallery = Array.isArray(w.gallery) ? [...w.gallery] : [];
+  renderGalleryGrid();
+  openModal(true);
+}
+
+document.getElementById('addWorkBtn').addEventListener('click', () => {
+  editingIndex = null;
+  document.getElementById('workForm').reset();
+  document.getElementById('f-thumbnail').value = '';
+  document.getElementById('thumbPreview').src = '';
+  currentGallery = [];
+  renderGalleryGrid();
+  openModal(false);
+});
+
+document.getElementById('cancelModalBtn').addEventListener('click', closeModal);
+document.getElementById('editModalOverlay').addEventListener('click', (e) => {
+  if (e.target.id === 'editModalOverlay') closeModal();
+});
+
+function renderGalleryGrid() {
+  const grid = document.getElementById('galleryGrid');
+  grid.innerHTML = currentGallery.map((url, i) => `
+    <div class="gallery-item">
+      <img src="${escapeHtml(url)}">
+      <button type="button" class="rm-btn" onclick="removeGalleryImage(${i})">✕</button>
+    </div>
+  `).join('');
+}
+function removeGalleryImage(i) {
+  currentGallery.splice(i, 1);
+  renderGalleryGrid();
+}
+
+/* ---- Image upload helpers (base64 JSON upload, max ~3.5MB) ---- */
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result.split(',')[1]);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+async function uploadImage(file, statusEl) {
+  if (file.size > 3.5 * 1024 * 1024) {
+    throw new Error('File is ' + (file.size / 1024 / 1024).toFixed(1) + 'MB — please compress/resize it under 3.5MB first.');
+  }
+  if (statusEl) statusEl.textContent = 'Uploading…';
+  const dataBase64 = await fileToBase64(file);
+  const resp = await fetch('/api/admin/upload', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ filename: file.name, contentType: file.type, dataBase64 }),
+  });
+  const data = await resp.json();
+  if (!resp.ok) throw new Error(data.error || 'Upload failed.');
+  if (statusEl) statusEl.textContent = 'Uploaded ✓';
+  return data.url;
+}
+
+document.getElementById('thumbUploadBtn').addEventListener('click', () => document.getElementById('thumbFileInput').click());
+document.getElementById('thumbFileInput').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const statusEl = document.getElementById('thumbUploadStatus');
+  try {
+    const url = await uploadImage(file, statusEl);
+    document.getElementById('f-thumbnail').value = url;
+    document.getElementById('thumbPreview').src = url;
+  } catch (err) {
+    statusEl.textContent = err.message;
+    showToast(err.message, true);
+  }
+  e.target.value = '';
+});
+
+document.getElementById('galleryUploadBtn').addEventListener('click', () => document.getElementById('galleryFileInput').click());
+document.getElementById('galleryFileInput').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  try {
+    const url = await uploadImage(file, null);
+    currentGallery.push(url);
+    renderGalleryGrid();
+  } catch (err) {
+    showToast(err.message, true);
+  }
+  e.target.value = '';
+});
+
+document.getElementById('workForm').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const thumbnail = document.getElementById('f-thumbnail').value.trim();
+  if (!thumbnail) {
+    showToast('Please upload a thumbnail image first.', true);
+    return;
+  }
+  const work = {
+    category: document.getElementById('f-category').value,
+    title: document.getElementById('f-title').value.trim(),
+    title_zh: document.getElementById('f-title_zh').value.trim(),
+    description: document.getElementById('f-description').value.trim(),
+    description_zh: document.getElementById('f-description_zh').value.trim(),
+    tools: document.getElementById('f-tools').value.trim(),
+    year: document.getElementById('f-year').value.trim(),
+    client: document.getElementById('f-client').value.trim(),
+    client_zh: document.getElementById('f-client_zh').value.trim(),
+    thumbnail,
+  };
+  const youtubeId = document.getElementById('f-youtube_id').value.trim();
+  const figmaLink = document.getElementById('f-figma_link').value.trim();
+  if (youtubeId) work.youtube_id = youtubeId;
+  if (figmaLink) work.figma_link = figmaLink;
+  if (currentGallery.length) work.gallery = [...currentGallery];
+
+  if (editingIndex === null) {
+    worksData.unshift(work); // newest-first, matches homepage "latest per category" logic
+  } else {
+    worksData[editingIndex] = work;
+  }
+  renderWorksTable();
+  setDirty(true);
+  closeModal();
+});
+
+document.getElementById('saveAllBtn').addEventListener('click', async () => {
+  const btn = document.getElementById('saveAllBtn');
+  btn.disabled = true;
+  btn.textContent = 'Saving…';
+  try {
+    const resp = await fetch('/api/portfolio', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ works: worksData }),
+    });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.error || 'Save failed.');
+    setDirty(false);
+    showToast('Saved ' + data.count + ' works — live on the site now.');
+  } catch (err) {
+    showToast(err.message, true);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-cloud-arrow-up"></i> Save Changes';
+  }
+});
+
+window.addEventListener('beforeunload', (e) => {
+  if (isDirty) { e.preventDefault(); e.returnValue = ''; }
+});
+
+/* =========================================================
+   5. Init
+   ========================================================= */
+function initDashboard() {
+  loadWorks();
+  loadAnalytics();
+}
+</script>
+
 </body>
 </html>

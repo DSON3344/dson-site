@@ -74,8 +74,11 @@ document.addEventListener('DOMContentLoaded', () => {
 async function loadCMSData() {
     const grid = document.getElementById('portfolio-grid');
     try {
-        const response = await fetch('data/portfolio.json');
-        if (!response.ok) throw new Error('Portfolio JSON not found');
+        // Served by /api/portfolio (Vercel Blob-backed, editable from /admin).
+        // Falls back to the bundled data/portfolio.json seed automatically
+        // server-side if no admin edits have been saved yet.
+        const response = await fetch('/api/portfolio');
+        if (!response.ok) throw new Error('Portfolio data not found');
         
         const data = await response.json();
         if (data && data.works && data.works.length > 0) {

@@ -28,6 +28,7 @@
   
   <link href="https://unpkg.com/aos@2.3.1/dist/aos.css" rel="stylesheet">
   <link rel="stylesheet" href="DSON.css">
+  <script src="ga4-tracking.js"></script>
 </head>
 <body>
 
@@ -179,17 +180,6 @@
               closeIcon.style.display = 'none';
           }
       });
-  }
-
-  // Netlify Identity
-  if (window.netlifyIdentity) {
-    window.netlifyIdentity.on("init", user => {
-      if (!user) {
-        window.netlifyIdentity.on("login", () => {
-          document.location.href = "/admin/";
-        });
-      }
-    });
   }
 </script>
 

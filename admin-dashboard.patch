@@ -1,0 +1,4020 @@
+From 92444e3701e61208583301f784a00cb0092e4b7f Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Mon, 21 Sep 2026 11:05:20 +0800
+Subject: [PATCH 1/2] Add admin dashboard: portfolio CMS, image upload, GA4
+ analytics
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Replaces the non-functional Netlify CMS admin (git-gateway/Netlify
+Identity doesn't work on Vercel hosting) with a self-contained admin
+area at /admin, gated by a single-password session login:
+
+- /api/admin/login, logout, me — HMAC-signed session cookie auth
+- /api/portfolio — public GET, authenticated POST to replace the
+  works list, backed by a Vercel Blob JSON store (falls back to the
+  bundled data/portfolio.json seed if the blob doesn't exist yet)
+- /api/admin/upload — image uploads to Vercel Blob (base64 JSON,
+  capped ~3.5MB to stay under Vercel's request body limit)
+- /api/admin/analytics — Google Analytics 4 Data API client using a
+  service account (manual JWT signing, no googleapis dependency);
+  degrades to a "not configured" state until GA_PROPERTY_ID,
+  GA_CLIENT_EMAIL and GA_PRIVATE_KEY are set
+- /admin/login.html, /admin/index.html — dashboard UI matching the
+  site's dark glassmorphism theme: traffic charts/top pages/devices/
+  countries, plus full works CRUD with drag-in image upload and
+  gallery management
+- portfolio.html now loads from /api/portfolio instead of the static
+  JSON file directly, so admin edits go live without a code deploy
+- ga4-tracking.js adds the GA4 gtag snippet to all public pages
+  (inert placeholder ID until a real GA4 property is created)
+
+Provisioned a Vercel Blob store and ADMIN_PASSWORD/SESSION_SECRET
+env vars on the dson-site project to support this.
+---
+ .gitignore             |   3 +
+ DSON.js                | 955 +++++++++++++++++++++--------------------
+ admin/config.yml       |  31 --
+ admin/index.html       | 836 +++++++++++++++++++++++++++++++++++-
+ admin/login.html       | 163 +++++++
+ api/admin/analytics.js |  63 +++
+ api/admin/login.js     |  30 ++
+ api/admin/logout.js    |   6 +
+ api/admin/me.js        |   6 +
+ api/admin/upload.js    |  43 ++
+ api/portfolio.js       |  23 +
+ contact.html           |   1 +
+ ga4-tracking.js        |  24 ++
+ index.html             |  12 +-
+ lib/auth.js            |  94 ++++
+ lib/ga4.js             |  85 ++++
+ lib/portfolio-store.js |  42 ++
+ package-lock.json      | 369 ++++++++++++++++
+ package.json           |  12 +
+ portfolio.html         |   1 +
+ socialmedia.html       |   1 +
+ 21 files changed, 2272 insertions(+), 528 deletions(-)
+ delete mode 100644 admin/config.yml
+ create mode 100644 admin/login.html
+ create mode 100644 api/admin/analytics.js
+ create mode 100644 api/admin/login.js
+ create mode 100644 api/admin/logout.js
+ create mode 100644 api/admin/me.js
+ create mode 100644 api/admin/upload.js
+ create mode 100644 api/portfolio.js
+ create mode 100644 ga4-tracking.js
+ create mode 100644 lib/auth.js
+ create mode 100644 lib/ga4.js
+ create mode 100644 lib/portfolio-store.js
+ create mode 100644 package-lock.json
+ create mode 100644 package.json
+
+diff --git a/.gitignore b/.gitignore
+index 6582234..95a6210 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -1,2 +1,5 @@
+ # Local Netlify folder
+ .netlify
++
++# Node dependencies (installed by Vercel during build)
++node_modules
+diff --git a/DSON.js b/DSON.js
+index a43345a..8ad64cb 100644
+--- a/DSON.js
++++ b/DSON.js
+@@ -1,477 +1,480 @@
+-/**
+- * DSON Portfolio Core Script - ULTIMATE UNABRIDGED VERSION
+- * Features: 
+- * - Full CMS Integration (Decap/Netlify CMS)
+- * - Smart "All Work" Logic (1 Latest per Category)
+- * - Specific Category Pagination (Load More System)
+- * - Advanced Dynamic Modals (YouTube Embeds, Figma Prototypes, Image Sliders)
+- * - Image Lightbox System (Ghost-click Fixed)
+- * - Global Language Sync & Persistence (localStorage)
+- * - AOS (Animate On Scroll) Orchestration for Dynamic Content
+- * - Touch & Mouse Drag Swipe Support for Gallery
+- */
+-
+-// --- Global Variables ---
+-let modalData = {};           // Stores project details for modals
+-let allWorksData = [];        // Raw project list from CMS
+-let currentFilter = 'all';    // Active category filter
+-let currentLimit = 6;         // Items limit for specific categories
+-let currentGallery = [];      // Array for active modal's images
+-let currentGalleryIndex = 0;  // Index for active modal's slider
+-
+-// --- 1. System Initialization ---
+-document.addEventListener('DOMContentLoaded', () => {
+-    const langLinks = document.querySelectorAll('.lang-switcher a');
+-    
+-    // ✨ Memory: Load saved language preference
+-    const savedLang = localStorage.getItem('selectedLang');
+-    if (savedLang && langLinks.length > 0) {
+-        langLinks.forEach(link => {
+-            const isZhBtn = link.innerText.includes('中文');
+-            if ((savedLang === 'zh' && isZhBtn) || (savedLang === 'en' && !isZhBtn)) {
+-                link.classList.add('active');
+-            } else {
+-                link.classList.remove('active');
+-            }
+-        });
+-    }
+-
+-    // Sync static text on page immediately
+-    syncAllLanguage();
+-
+-    // Kickstart CMS data loading if on portfolio page
+-    if (document.getElementById('portfolio-grid')) {
+-        loadCMSData();
+-    }
+-
+-    // Language Switcher Global Listener
+-    langLinks.forEach(link => {
+-        link.addEventListener('click', (e) => {
+-            e.preventDefault();
+-            langLinks.forEach(l => l.classList.remove('active'));
+-            link.classList.add('active');
+-            
+-            const isChinese = link.innerText.includes('中文');
+-            localStorage.setItem('selectedLang', isChinese ? 'zh' : 'en');
+-            
+-            syncAllLanguage();
+-            
+-            // If a modal is open, we re-render it to refresh its language
+-            const overlay = document.getElementById('modal-overlay');
+-            if (overlay.classList.contains('open')) {
+-                const activeKey = overlay.getAttribute('data-current-key');
+-                if (activeKey) openModal(activeKey);
+-            }
+-        });
+-    });
+-});
+-
+-// --- 2. Data Engine & Rendering ---
+-
+-/**
+- * Fetch JSON data generated by CMS
+- */
+-async function loadCMSData() {
+-    const grid = document.getElementById('portfolio-grid');
+-    try {
+-        const response = await fetch('data/portfolio.json');
+-        if (!response.ok) throw new Error('Portfolio JSON not found');
+-        
+-        const data = await response.json();
+-        if (data && data.works && data.works.length > 0) {
+-            console.log("CMS Data: Loaded successfully 🚀");
+-            allWorksData = data.works;
+-            renderPortfolioUI();
+-        }
+-    } catch (err) {
+-        console.warn("CMS Connection failed. Using placeholder or empty grid.", err);
+-        if(grid) grid.innerHTML = '';
+-    }
+-}
+-
+-/**
+- * Core Render Logic: Orchestrates Grid & Load More Button
+- */
+-function renderPortfolioUI() {
+-    const grid = document.getElementById('portfolio-grid');
+-    const loadMoreContainer = document.getElementById('load-more-container');
+-    if (!grid) return;
+-
+-    grid.innerHTML = ''; 
+-    modalData = {}; // Clear previous session data
+-
+-    const catLabels = {
+-        'uiux': { en: 'UI/UX', zh: 'UI/UX 设计' },
+-        'photo': { en: 'Photo Editing', zh: '照片后期' },
+-        'manipulation': { en: 'Image Manipulation', zh: '图像合成' },
+-        'video': { en: 'Video Editing', zh: '视频制作' },
+-        '3d': { en: '3D Modeling', zh: '3D 建模' },
+-        'graphic': { en: 'Graphic Design', zh: '平面设计' }
+-    };
+-
+-    let displayList = [];
+-
+-    if (currentFilter === 'all') {
+-        // ✨ SMART HOME LOGIC: Get exactly the latest 1 project from each of the 6 core categories
+-        const categories = ['video', 'uiux', 'manipulation', '3d', 'graphic', 'photo']; 
+-        categories.forEach(cat => {
+-            const latest = allWorksData.find(w => w.category === cat);
+-            if (latest) displayList.push(latest);
+-        });
+-        if (loadMoreContainer) loadMoreContainer.style.display = 'none';
+-    } else {
+-        // ✨ CATEGORY MODE: Filter by selected tag and apply current limit for pagination
+-        const filtered = allWorksData.filter(w => w.category === currentFilter);
+-        displayList = filtered.slice(0, currentLimit);
+-        
+-        if (loadMoreContainer) {
+-            loadMoreContainer.style.display = (filtered.length > currentLimit) ? 'block' : 'none';
+-        }
+-    }
+-
+-    // Build Grid Cards with Multilingual Metadata
+-    displayList.forEach((work, index) => {
+-        const uniqueKey = 'proj_' + index;
+-        const labels = catLabels[work.category] || { en: work.category, zh: work.category };
+-
+-        // Save to global modal storage
+-        modalData[uniqueKey] = { ...work, labels };
+-
+-        // Bento Grid Logic (Desktop)
+-        const bentoClass = (index % 4 === 0 || index % 4 === 3) ? 'bento-large' : '';
+-
+-        grid.innerHTML += `
+-            <div class="portfolio-item ${bentoClass}" onclick="openModal('${uniqueKey}')">
+-              <div class="portfolio-bg">
+-                <img src="${work.thumbnail}" alt="${work.title}" class="portfolio-img" onerror="this.src='Image/Logo_Colour.png'">
+-              </div>
+-              <div class="portfolio-overlay"></div>
+-              <div class="portfolio-info">
+-                <span class="lang-en">${labels.en}</span>
+-                <span class="lang-zh">${labels.zh}</span>
+-                <h3 class="lang-en">${work.title}</h3>
+-                <h3 class="lang-zh">${work.title_zh || work.title}</h3>
+-              </div>
+-            </div>
+-        `;
+-    });
+-
+-    syncAllLanguage(); 
+-    applyPortfolioAnimations(); 
+-}
+-
+-/**
+- * Handles category selection from the filter bar
+- */
+-function filterPortfolio(category, btnElement) {
+-    const buttons = document.querySelectorAll('.filter-btn');
+-    buttons.forEach(btn => btn.classList.remove('active'));
+-    if (btnElement) btnElement.classList.add('active');
+-
+-    currentFilter = category;
+-    currentLimit = 6; 
+-    renderPortfolioUI();
+-}
+-
+-/**
+- * Loads the next batch of projects in category view
+- */
+-function loadMoreItems() {
+-    currentLimit += 6; 
+-    renderPortfolioUI();
+-}
+-
+-// --- 3. Animation & Language Systems ---
+-
+-function applyPortfolioAnimations() {
+-    const items = document.querySelectorAll('.portfolio-item');
+-    if (items.length > 0) {
+-        items.forEach((card, index) => {
+-            card.removeAttribute('data-aos');
+-            card.classList.remove('aos-animate');
+-            void card.offsetWidth; 
+-
+-            const animationType = (index % 2 === 0) ? 'fade-right' : 'fade-left';
+-            card.setAttribute('data-aos', animationType);
+-            card.setAttribute('data-aos-delay', (index % 6) * 50); 
+-        });
+-
+-        AOS.init({
+-            duration: 1000,
+-            easing: 'ease-out-cubic',
+-            once: true,
+-            offset: 0 
+-        });
+-        
+-        AOS.refreshHard(); 
+-    }
+-}
+-
+-function syncAllLanguage() {
+-    const lang = localStorage.getItem('selectedLang') || 'en';
+-    const enNodes = document.querySelectorAll('.lang-en');
+-    const zhNodes = document.querySelectorAll('.lang-zh');
+-
+-    if (lang === 'zh') {
+-        enNodes.forEach(el => el.style.setProperty('display', 'none', 'important'));
+-        zhNodes.forEach(el => el.style.setProperty('display', 'block', 'important'));
+-    } else {
+-        enNodes.forEach(el => el.style.setProperty('display', 'block', 'important'));
+-        zhNodes.forEach(el => el.style.setProperty('display', 'none', 'important'));
+-    }
+-}
+-
+-// --- 4. Modal Engine (Full Features & Fixes) ---
+-
+-function openModal(key) {
+-    const d = modalData[key];
+-    if (!d) return;
+-
+-    const overlay = document.getElementById('modal-overlay');
+-    const mc = document.getElementById('modal-content');
+-    overlay.setAttribute('data-current-key', key); 
+-
+-    mc.style.maxWidth = '1100px';
+-    mc.style.width = '92%';
+-    mc.style.maxHeight = '92vh';
+-    mc.style.overflowY = 'auto';
+-    mc.style.padding = '3rem';
+-
+-    let mediaHTML = '';
+-    
+-    if (d.youtube_id) {
+-        mediaHTML = `
+-            <div style="width: 100%; display: flex; flex-direction: column; gap: 1rem; height:auto;">
+-                <iframe width="100%" height="100%" 
+-                        src="https://www.youtube.com/embed/${d.youtube_id}?rel=0&autoplay=0" 
+-                        title="DSON Project Video" frameborder="0" 
+-                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" 
+-                        allowfullscreen
+-                        style="border-radius:12px; box-shadow:0 10px 30px rgba(0,0,0,0.5); aspect-ratio: 16/9; background:#000;">
+-                </iframe>
+-                <a href="https://www.youtube.com/watch?v=${d.youtube_id}" target="_blank" 
+-                   style="display:flex; align-items:center; justify-content:center; gap:10px; padding:14px; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); border-radius:10px; color:#fff; text-decoration:none; font-size:0.85rem; transition:0.3s;">
+-                    <i class="bi bi-youtube" style="color:#ff0000; font-size:1.3rem;"></i>
+-                    <span class="lang-en">View on YouTube (Original Quality)</span>
+-                    <span class="lang-zh">前往 YouTube 观看 (原片画质)</span>
+-                </a>
+-            </div>`;
+-    } else if (d.figma_link) {
+-        mediaHTML = `
+-            <div style="width: 100%; height: 68vh; background:rgba(0,0,0,0.2); border-radius:12px; overflow:hidden; box-shadow:0 10px 30px rgba(0,0,0,0.5);">
+-                <iframe style="width:100%; height:100%; border:1px solid rgba(255,255,255,0.1);" 
+-                        src="https://www.figma.com/embed?embed_host=share&url=${encodeURIComponent(d.figma_link)}" 
+-                        allowfullscreen>
+-                </iframe>
+-            </div>`;
+-    } else if (d.gallery && d.gallery.length > 1) {
+-        currentGallery = d.gallery;
+-        currentGalleryIndex = 0;
+-        // HTML 中不再嵌入 onclick，全部由底部的事件监听器接管喵！
+-        mediaHTML = `
+-            <div style="position:relative; width:100%; display:flex; flex-direction:column; justify-content:center; align-items:center; height:auto;">
+-                <div style="position:relative; width:100%; display:flex; justify-content:center; align-items:center; user-select: none;">
+-                    <button class="gallery-nav-btn" onclick="changeGalleryImage(-1)" style="position:absolute; z-index:10; left:15px; background:rgba(0,0,0,0.6); color:white; border:1px solid rgba(255,255,255,0.2); border-radius:50%; width:45px; height:45px; cursor:pointer; font-size:1.2rem; backdrop-filter:blur(5px);"><i class="bi bi-chevron-left"></i></button>
+-                    <img id="modal-gallery-img" src="${currentGallery[0]}" 
+-                         class="portfolio-img" draggable="false"
+-                         style="cursor:zoom-in; transition:opacity 0.2s ease; user-select:none;">
+-                    <button class="gallery-nav-btn" onclick="changeGalleryImage(1)" style="position:absolute; z-index:10; right:15px; background:rgba(0,0,0,0.6); color:white; border:1px solid rgba(255,255,255,0.2); border-radius:50%; width:45px; height:45px; cursor:pointer; font-size:1.2rem; backdrop-filter:blur(5px);"><i class="bi bi-chevron-right"></i></button>
+-                </div>
+-                <div id="gallery-counter" class="gallery-page-counter">1 / ${currentGallery.length}</div>
+-            </div>`;
+-    } else {
+-        mediaHTML = `
+-            <img src="${d.thumbnail}" alt="${d.title}" 
+-                 class="portfolio-img"
+-                 style="cursor:zoom-in;"
+-                 onclick="openLightbox('${d.thumbnail}')">`;
+-    }
+-
+-    // ✨✨✨ FIX 1: d.title 完全替代 work.title，解决崩溃报错喵！
+-    mc.innerHTML = `
+-        <button class="modal-close" onclick="closeModal({target:document.getElementById('modal-overlay')})">
+-            <i class="bi bi-x-lg"></i>
+-        </button>
+-        <div style="display:flex; gap:3.5rem; flex-wrap:wrap; align-items:flex-start;">
+-            <div style="flex:1 1 500px; position:relative; display:flex; justify-content:center; align-items:center; height:auto;">
+-                ${mediaHTML}
+-            </div>
+-            <div style="flex:1 1 350px; display:flex; flex-direction:column; justify-content:center;">
+-                <div class="project-tag-container" style="font-size:0.75rem; letter-spacing:0.2em; text-transform:uppercase; color:var(--accent); margin-bottom:1rem;">
+-                    <span class="lang-en">${d.labels.en}</span>
+-                    <span class="lang-zh">${d.labels.zh}</span>
+-                </div>
+-                <h2 class="project-title-h2 lang-en" style="font-family:'Syne'; font-size:2.5rem; font-weight:800; margin-bottom:1.5rem; line-height:1.1;">${d.title}</h2>
+-                <h2 class="project-title-h2 lang-zh" style="font-family:'Syne'; font-size:2.5rem; font-weight:800; margin-bottom:1.5rem; line-height:1.1;">${d.title_zh || d.title}</h2>
+-                
+-                <p class="project-desc-p" style="color:var(--text-muted); line-height:1.9; margin-bottom:2rem; font-size:1rem;">
+-                    <span class="lang-en">${d.description || d.desc}</span>
+-                    <span class="lang-zh">${d.description_zh || d.desc_zh || d.desc}</span>
+-                </p>
+-                <div class="project-meta-details" style="display:flex; gap:3rem; border-top:1px solid rgba(255,255,255,0.1); padding-top:2rem; flex-wrap:wrap;">
+-                    <div>
+-                        <label style="display:block; font-size:0.7rem; color:var(--text-muted); margin-bottom:8px; text-transform:uppercase; letter-spacing:0.1em;">
+-                            <span class="lang-en">Tools</span><span class="lang-zh">使用工具</span>
+-                        </label>
+-                        <span style="font-family:'Inter'; font-weight:600; color:var(--white);">${d.tools}</span>
+-                    </div>
+-                    <div>
+-                        <label style="display:block; font-size:0.7rem; color:var(--text-muted); margin-bottom:8px; text-transform:uppercase; letter-spacing:0.1em;">
+-                            <span class="lang-en">Year</span><span class="lang-zh">创作年份</span>
+-                        </label>
+-                        <span style="font-family:'Inter'; font-weight:600; color:var(--white);">${d.year}</span>
+-                    </div>
+-                </div>
+-            </div>
+-        </div>
+-    `;
+-
+-    overlay.classList.add('open');
+-    syncAllLanguage(); 
+-
+-    // ✨✨✨ FIX 2: 精准识别“点击”与“滑动”，根治弹窗重叠 Bug喵！ ✨✨✨
+-    if (d.gallery && d.gallery.length > 1) {
+-        const galleryImg = document.getElementById('modal-gallery-img');
+-        if (galleryImg) {
+-            let startX = 0;
+-            let endX = 0;
+-
+-            // Mobile Touch Events
+-            galleryImg.addEventListener('touchstart', e => {
+-                startX = e.changedTouches[0].screenX;
+-            }, {passive: true});
+-
+-            galleryImg.addEventListener('touchend', e => {
+-                endX = e.changedTouches[0].screenX;
+-                handleSwipeAction();
+-            });
+-
+-            // Desktop Mouse Events
+-            galleryImg.addEventListener('mousedown', e => {
+-                startX = e.clientX;
+-                e.preventDefault(); // 阻止浏览器原生的图片拖拽黑影喵
+-            });
+-
+-            galleryImg.addEventListener('mouseup', e => {
+-                endX = e.clientX;
+-                handleSwipeAction();
+-            });
+-
+-            // 划动判定核心逻辑喵
+-            function handleSwipeAction() {
+-                if (startX - endX > 40) {
+-                    changeGalleryImage(1);  // 向左滑 -> 下一张
+-                } else if (endX - startX > 40) {
+-                    changeGalleryImage(-1); // 向右滑 -> 上一张
+-                }
+-            }
+-
+-            // 本地原生点击判定，绝不和触控冲突产生Ghost Click喵
+-            galleryImg.addEventListener('click', e => {
+-                // 如果刚刚发生了长距离滑动，则拒绝触发“点击放大”喵！
+-                if (Math.abs(startX - endX) > 10) {
+-                    return;
+-                }
+-                openLightbox(currentGallery[currentGalleryIndex]);
+-            });
+-        }
+-    }
+-}
+-
+-/**
+- * Gallery Navigation Logic
+- */
+-window.changeGalleryImage = function(direction) {
+-    if (currentGallery.length === 0) return;
+-    currentGalleryIndex = (currentGalleryIndex + direction + currentGallery.length) % currentGallery.length;
+-
+-    const imgEl = document.getElementById('modal-gallery-img');
+-    const counterEl = document.getElementById('gallery-counter');
+-
+-    if (imgEl && counterEl) {
+-        imgEl.style.opacity = '0';
+-        setTimeout(() => {
+-            imgEl.src = currentGallery[currentGalleryIndex];
+-            imgEl.style.opacity = '1';
+-            counterEl.innerText = `${currentGalleryIndex + 1} / ${currentGallery.length}`;
+-        }, 200); 
+-    }
+-};
+-
+-/**
+- * Modal Disposal Logic
+- */
+-function closeModal(e) {
+-    const overlay = document.getElementById('modal-overlay');
+-    if (e.target === overlay || e.target.closest('.modal-close')) {
+-        overlay.classList.remove('open');
+-        setTimeout(() => {
+-            const mc = document.getElementById('modal-content');
+-            if (mc) mc.innerHTML = '';
+-        }, 300);
+-    }
+-}
+-
+-// --- 5. Utility & Event Logic ---
+-
+-/**
+- * Fullscreen Image Lightbox Node (性能优化极致丝滑版 ✨)
+- */
+-function openLightbox(imgSrc) {
+-    let lightbox = document.getElementById('lightbox-overlay');
+-    if (!lightbox) {
+-        lightbox = document.createElement('div');
+-        lightbox.id = 'lightbox-overlay';
+-        
+-        // ✨ 优化1：移除极其消耗手机性能的 backdrop-filter，改用 98% 纯黑背景，并开启 opacity 硬件加速
+-        lightbox.style.cssText = 'position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(8,10,15,0.98); z-index:10000; display:flex; justify-content:center; align-items:center; cursor:zoom-out; opacity:0; transition:opacity 0.3s ease; display:none; will-change: opacity;';
+-        
+-        // ✨ 优化2：减小阴影渲染压力，开启 transform 硬件加速，确保动画 60fps 丝滑
+-        lightbox.innerHTML = `<img id="lightbox-img" src="" style="max-width:92vw; max-height:92vh; border-radius:6px; box-shadow:0 10px 25px rgba(0,0,0,0.5); transform:scale(0.95); transition:transform 0.3s cubic-bezier(0.165, 0.84, 0.44, 1); will-change: transform; object-fit: contain;">`;
+-        
+-        document.body.appendChild(lightbox);
+-        
+-        // 关闭逻辑
+-        lightbox.onclick = () => {
+-            lightbox.style.opacity = '0';
+-            document.getElementById('lightbox-img').style.transform = 'scale(0.95)';
+-            setTimeout(() => { lightbox.style.display = 'none'; }, 300);
+-        };
+-    }
+-    
+-    const img = document.getElementById('lightbox-img');
+-    img.src = imgSrc;
+-    lightbox.style.display = 'flex';
+-    
+-    // ✨ 优化3：使用底层强制回流 (Reflow) 替代玄学定时器，确保动画瞬间顺滑触发
+-    void lightbox.offsetWidth;
+-    
+-    lightbox.style.opacity = '1';
+-    img.style.transform = 'scale(1)';
+-}
+-
+-// Keyboard Navigation
+-document.addEventListener('keydown', e => {
+-    // Escape: Close Lightbox or Modal
+-    if (e.key === 'Escape') {
+-        const lb = document.getElementById('lightbox-overlay');
+-        if (lb && lb.style.display === 'flex') return lb.click();
+-        const mo = document.getElementById('modal-overlay');
+-        if (mo && mo.classList.contains('open')) closeModal({ target: mo });
+-    }
+-    // Arrows: Control Modal Gallery
+-    if (document.getElementById('modal-gallery-img')) {
+-        if (e.key === 'ArrowRight') changeGalleryImage(1);
+-        if (e.key === 'ArrowLeft') changeGalleryImage(-1);
+-    }
+-});
+-
+-// Scroll Events: Back to Top Trigger
+-document.addEventListener('scroll', () => {
+-    const btn = document.getElementById('backToTopBtn');
+-    if (btn) (window.scrollY > 500) ? btn.classList.add('show') : btn.classList.remove('show');
+-});
+-
+-window.scrollToTop = () => {
+-    window.scrollTo({ top: 0, behavior: 'smooth' });
++/**
++ * DSON Portfolio Core Script - ULTIMATE UNABRIDGED VERSION
++ * Features: 
++ * - Full CMS Integration (Decap/Netlify CMS)
++ * - Smart "All Work" Logic (1 Latest per Category)
++ * - Specific Category Pagination (Load More System)
++ * - Advanced Dynamic Modals (YouTube Embeds, Figma Prototypes, Image Sliders)
++ * - Image Lightbox System (Ghost-click Fixed)
++ * - Global Language Sync & Persistence (localStorage)
++ * - AOS (Animate On Scroll) Orchestration for Dynamic Content
++ * - Touch & Mouse Drag Swipe Support for Gallery
++ */
++
++// --- Global Variables ---
++let modalData = {};           // Stores project details for modals
++let allWorksData = [];        // Raw project list from CMS
++let currentFilter = 'all';    // Active category filter
++let currentLimit = 6;         // Items limit for specific categories
++let currentGallery = [];      // Array for active modal's images
++let currentGalleryIndex = 0;  // Index for active modal's slider
++
++// --- 1. System Initialization ---
++document.addEventListener('DOMContentLoaded', () => {
++    const langLinks = document.querySelectorAll('.lang-switcher a');
++    
++    // ✨ Memory: Load saved language preference
++    const savedLang = localStorage.getItem('selectedLang');
++    if (savedLang && langLinks.length > 0) {
++        langLinks.forEach(link => {
++            const isZhBtn = link.innerText.includes('中文');
++            if ((savedLang === 'zh' && isZhBtn) || (savedLang === 'en' && !isZhBtn)) {
++                link.classList.add('active');
++            } else {
++                link.classList.remove('active');
++            }
++        });
++    }
++
++    // Sync static text on page immediately
++    syncAllLanguage();
++
++    // Kickstart CMS data loading if on portfolio page
++    if (document.getElementById('portfolio-grid')) {
++        loadCMSData();
++    }
++
++    // Language Switcher Global Listener
++    langLinks.forEach(link => {
++        link.addEventListener('click', (e) => {
++            e.preventDefault();
++            langLinks.forEach(l => l.classList.remove('active'));
++            link.classList.add('active');
++            
++            const isChinese = link.innerText.includes('中文');
++            localStorage.setItem('selectedLang', isChinese ? 'zh' : 'en');
++            
++            syncAllLanguage();
++            
++            // If a modal is open, we re-render it to refresh its language
++            const overlay = document.getElementById('modal-overlay');
++            if (overlay.classList.contains('open')) {
++                const activeKey = overlay.getAttribute('data-current-key');
++                if (activeKey) openModal(activeKey);
++            }
++        });
++    });
++});
++
++// --- 2. Data Engine & Rendering ---
++
++/**
++ * Fetch JSON data generated by CMS
++ */
++async function loadCMSData() {
++    const grid = document.getElementById('portfolio-grid');
++    try {
++        // Served by /api/portfolio (Vercel Blob-backed, editable from /admin).
++        // Falls back to the bundled data/portfolio.json seed automatically
++        // server-side if no admin edits have been saved yet.
++        const response = await fetch('/api/portfolio');
++        if (!response.ok) throw new Error('Portfolio data not found');
++        
++        const data = await response.json();
++        if (data && data.works && data.works.length > 0) {
++            console.log("CMS Data: Loaded successfully 🚀");
++            allWorksData = data.works;
++            renderPortfolioUI();
++        }
++    } catch (err) {
++        console.warn("CMS Connection failed. Using placeholder or empty grid.", err);
++        if(grid) grid.innerHTML = '';
++    }
++}
++
++/**
++ * Core Render Logic: Orchestrates Grid & Load More Button
++ */
++function renderPortfolioUI() {
++    const grid = document.getElementById('portfolio-grid');
++    const loadMoreContainer = document.getElementById('load-more-container');
++    if (!grid) return;
++
++    grid.innerHTML = ''; 
++    modalData = {}; // Clear previous session data
++
++    const catLabels = {
++        'uiux': { en: 'UI/UX', zh: 'UI/UX 设计' },
++        'photo': { en: 'Photo Editing', zh: '照片后期' },
++        'manipulation': { en: 'Image Manipulation', zh: '图像合成' },
++        'video': { en: 'Video Editing', zh: '视频制作' },
++        '3d': { en: '3D Modeling', zh: '3D 建模' },
++        'graphic': { en: 'Graphic Design', zh: '平面设计' }
++    };
++
++    let displayList = [];
++
++    if (currentFilter === 'all') {
++        // ✨ SMART HOME LOGIC: Get exactly the latest 1 project from each of the 6 core categories
++        const categories = ['video', 'uiux', 'manipulation', '3d', 'graphic', 'photo']; 
++        categories.forEach(cat => {
++            const latest = allWorksData.find(w => w.category === cat);
++            if (latest) displayList.push(latest);
++        });
++        if (loadMoreContainer) loadMoreContainer.style.display = 'none';
++    } else {
++        // ✨ CATEGORY MODE: Filter by selected tag and apply current limit for pagination
++        const filtered = allWorksData.filter(w => w.category === currentFilter);
++        displayList = filtered.slice(0, currentLimit);
++        
++        if (loadMoreContainer) {
++            loadMoreContainer.style.display = (filtered.length > currentLimit) ? 'block' : 'none';
++        }
++    }
++
++    // Build Grid Cards with Multilingual Metadata
++    displayList.forEach((work, index) => {
++        const uniqueKey = 'proj_' + index;
++        const labels = catLabels[work.category] || { en: work.category, zh: work.category };
++
++        // Save to global modal storage
++        modalData[uniqueKey] = { ...work, labels };
++
++        // Bento Grid Logic (Desktop)
++        const bentoClass = (index % 4 === 0 || index % 4 === 3) ? 'bento-large' : '';
++
++        grid.innerHTML += `
++            <div class="portfolio-item ${bentoClass}" onclick="openModal('${uniqueKey}')">
++              <div class="portfolio-bg">
++                <img src="${work.thumbnail}" alt="${work.title}" class="portfolio-img" onerror="this.src='Image/Logo_Colour.png'">
++              </div>
++              <div class="portfolio-overlay"></div>
++              <div class="portfolio-info">
++                <span class="lang-en">${labels.en}</span>
++                <span class="lang-zh">${labels.zh}</span>
++                <h3 class="lang-en">${work.title}</h3>
++                <h3 class="lang-zh">${work.title_zh || work.title}</h3>
++              </div>
++            </div>
++        `;
++    });
++
++    syncAllLanguage(); 
++    applyPortfolioAnimations(); 
++}
++
++/**
++ * Handles category selection from the filter bar
++ */
++function filterPortfolio(category, btnElement) {
++    const buttons = document.querySelectorAll('.filter-btn');
++    buttons.forEach(btn => btn.classList.remove('active'));
++    if (btnElement) btnElement.classList.add('active');
++
++    currentFilter = category;
++    currentLimit = 6; 
++    renderPortfolioUI();
++}
++
++/**
++ * Loads the next batch of projects in category view
++ */
++function loadMoreItems() {
++    currentLimit += 6; 
++    renderPortfolioUI();
++}
++
++// --- 3. Animation & Language Systems ---
++
++function applyPortfolioAnimations() {
++    const items = document.querySelectorAll('.portfolio-item');
++    if (items.length > 0) {
++        items.forEach((card, index) => {
++            card.removeAttribute('data-aos');
++            card.classList.remove('aos-animate');
++            void card.offsetWidth; 
++
++            const animationType = (index % 2 === 0) ? 'fade-right' : 'fade-left';
++            card.setAttribute('data-aos', animationType);
++            card.setAttribute('data-aos-delay', (index % 6) * 50); 
++        });
++
++        AOS.init({
++            duration: 1000,
++            easing: 'ease-out-cubic',
++            once: true,
++            offset: 0 
++        });
++        
++        AOS.refreshHard(); 
++    }
++}
++
++function syncAllLanguage() {
++    const lang = localStorage.getItem('selectedLang') || 'en';
++    const enNodes = document.querySelectorAll('.lang-en');
++    const zhNodes = document.querySelectorAll('.lang-zh');
++
++    if (lang === 'zh') {
++        enNodes.forEach(el => el.style.setProperty('display', 'none', 'important'));
++        zhNodes.forEach(el => el.style.setProperty('display', 'block', 'important'));
++    } else {
++        enNodes.forEach(el => el.style.setProperty('display', 'block', 'important'));
++        zhNodes.forEach(el => el.style.setProperty('display', 'none', 'important'));
++    }
++}
++
++// --- 4. Modal Engine (Full Features & Fixes) ---
++
++function openModal(key) {
++    const d = modalData[key];
++    if (!d) return;
++
++    const overlay = document.getElementById('modal-overlay');
++    const mc = document.getElementById('modal-content');
++    overlay.setAttribute('data-current-key', key); 
++
++    mc.style.maxWidth = '1100px';
++    mc.style.width = '92%';
++    mc.style.maxHeight = '92vh';
++    mc.style.overflowY = 'auto';
++    mc.style.padding = '3rem';
++
++    let mediaHTML = '';
++    
++    if (d.youtube_id) {
++        mediaHTML = `
++            <div style="width: 100%; display: flex; flex-direction: column; gap: 1rem; height:auto;">
++                <iframe width="100%" height="100%" 
++                        src="https://www.youtube.com/embed/${d.youtube_id}?rel=0&autoplay=0" 
++                        title="DSON Project Video" frameborder="0" 
++                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" 
++                        allowfullscreen
++                        style="border-radius:12px; box-shadow:0 10px 30px rgba(0,0,0,0.5); aspect-ratio: 16/9; background:#000;">
++                </iframe>
++                <a href="https://www.youtube.com/watch?v=${d.youtube_id}" target="_blank" 
++                   style="display:flex; align-items:center; justify-content:center; gap:10px; padding:14px; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); border-radius:10px; color:#fff; text-decoration:none; font-size:0.85rem; transition:0.3s;">
++                    <i class="bi bi-youtube" style="color:#ff0000; font-size:1.3rem;"></i>
++                    <span class="lang-en">View on YouTube (Original Quality)</span>
++                    <span class="lang-zh">前往 YouTube 观看 (原片画质)</span>
++                </a>
++            </div>`;
++    } else if (d.figma_link) {
++        mediaHTML = `
++            <div style="width: 100%; height: 68vh; background:rgba(0,0,0,0.2); border-radius:12px; overflow:hidden; box-shadow:0 10px 30px rgba(0,0,0,0.5);">
++                <iframe style="width:100%; height:100%; border:1px solid rgba(255,255,255,0.1);" 
++                        src="https://www.figma.com/embed?embed_host=share&url=${encodeURIComponent(d.figma_link)}" 
++                        allowfullscreen>
++                </iframe>
++            </div>`;
++    } else if (d.gallery && d.gallery.length > 1) {
++        currentGallery = d.gallery;
++        currentGalleryIndex = 0;
++        // HTML 中不再嵌入 onclick，全部由底部的事件监听器接管喵！
++        mediaHTML = `
++            <div style="position:relative; width:100%; display:flex; flex-direction:column; justify-content:center; align-items:center; height:auto;">
++                <div style="position:relative; width:100%; display:flex; justify-content:center; align-items:center; user-select: none;">
++                    <button class="gallery-nav-btn" onclick="changeGalleryImage(-1)" style="position:absolute; z-index:10; left:15px; background:rgba(0,0,0,0.6); color:white; border:1px solid rgba(255,255,255,0.2); border-radius:50%; width:45px; height:45px; cursor:pointer; font-size:1.2rem; backdrop-filter:blur(5px);"><i class="bi bi-chevron-left"></i></button>
++                    <img id="modal-gallery-img" src="${currentGallery[0]}" 
++                         class="portfolio-img" draggable="false"
++                         style="cursor:zoom-in; transition:opacity 0.2s ease; user-select:none;">
++                    <button class="gallery-nav-btn" onclick="changeGalleryImage(1)" style="position:absolute; z-index:10; right:15px; background:rgba(0,0,0,0.6); color:white; border:1px solid rgba(255,255,255,0.2); border-radius:50%; width:45px; height:45px; cursor:pointer; font-size:1.2rem; backdrop-filter:blur(5px);"><i class="bi bi-chevron-right"></i></button>
++                </div>
++                <div id="gallery-counter" class="gallery-page-counter">1 / ${currentGallery.length}</div>
++            </div>`;
++    } else {
++        mediaHTML = `
++            <img src="${d.thumbnail}" alt="${d.title}" 
++                 class="portfolio-img"
++                 style="cursor:zoom-in;"
++                 onclick="openLightbox('${d.thumbnail}')">`;
++    }
++
++    // ✨✨✨ FIX 1: d.title 完全替代 work.title，解决崩溃报错喵！
++    mc.innerHTML = `
++        <button class="modal-close" onclick="closeModal({target:document.getElementById('modal-overlay')})">
++            <i class="bi bi-x-lg"></i>
++        </button>
++        <div style="display:flex; gap:3.5rem; flex-wrap:wrap; align-items:flex-start;">
++            <div style="flex:1 1 500px; position:relative; display:flex; justify-content:center; align-items:center; height:auto;">
++                ${mediaHTML}
++            </div>
++            <div style="flex:1 1 350px; display:flex; flex-direction:column; justify-content:center;">
++                <div class="project-tag-container" style="font-size:0.75rem; letter-spacing:0.2em; text-transform:uppercase; color:var(--accent); margin-bottom:1rem;">
++                    <span class="lang-en">${d.labels.en}</span>
++                    <span class="lang-zh">${d.labels.zh}</span>
++                </div>
++                <h2 class="project-title-h2 lang-en" style="font-family:'Syne'; font-size:2.5rem; font-weight:800; margin-bottom:1.5rem; line-height:1.1;">${d.title}</h2>
++                <h2 class="project-title-h2 lang-zh" style="font-family:'Syne'; font-size:2.5rem; font-weight:800; margin-bottom:1.5rem; line-height:1.1;">${d.title_zh || d.title}</h2>
++                
++                <p class="project-desc-p" style="color:var(--text-muted); line-height:1.9; margin-bottom:2rem; font-size:1rem;">
++                    <span class="lang-en">${d.description || d.desc}</span>
++                    <span class="lang-zh">${d.description_zh || d.desc_zh || d.desc}</span>
++                </p>
++                <div class="project-meta-details" style="display:flex; gap:3rem; border-top:1px solid rgba(255,255,255,0.1); padding-top:2rem; flex-wrap:wrap;">
++                    <div>
++                        <label style="display:block; font-size:0.7rem; color:var(--text-muted); margin-bottom:8px; text-transform:uppercase; letter-spacing:0.1em;">
++                            <span class="lang-en">Tools</span><span class="lang-zh">使用工具</span>
++                        </label>
++                        <span style="font-family:'Inter'; font-weight:600; color:var(--white);">${d.tools}</span>
++                    </div>
++                    <div>
++                        <label style="display:block; font-size:0.7rem; color:var(--text-muted); margin-bottom:8px; text-transform:uppercase; letter-spacing:0.1em;">
++                            <span class="lang-en">Year</span><span class="lang-zh">创作年份</span>
++                        </label>
++                        <span style="font-family:'Inter'; font-weight:600; color:var(--white);">${d.year}</span>
++                    </div>
++                </div>
++            </div>
++        </div>
++    `;
++
++    overlay.classList.add('open');
++    syncAllLanguage(); 
++
++    // ✨✨✨ FIX 2: 精准识别“点击”与“滑动”，根治弹窗重叠 Bug喵！ ✨✨✨
++    if (d.gallery && d.gallery.length > 1) {
++        const galleryImg = document.getElementById('modal-gallery-img');
++        if (galleryImg) {
++            let startX = 0;
++            let endX = 0;
++
++            // Mobile Touch Events
++            galleryImg.addEventListener('touchstart', e => {
++                startX = e.changedTouches[0].screenX;
++            }, {passive: true});
++
++            galleryImg.addEventListener('touchend', e => {
++                endX = e.changedTouches[0].screenX;
++                handleSwipeAction();
++            });
++
++            // Desktop Mouse Events
++            galleryImg.addEventListener('mousedown', e => {
++                startX = e.clientX;
++                e.preventDefault(); // 阻止浏览器原生的图片拖拽黑影喵
++            });
++
++            galleryImg.addEventListener('mouseup', e => {
++                endX = e.clientX;
++                handleSwipeAction();
++            });
++
++            // 划动判定核心逻辑喵
++            function handleSwipeAction() {
++                if (startX - endX > 40) {
++                    changeGalleryImage(1);  // 向左滑 -> 下一张
++                } else if (endX - startX > 40) {
++                    changeGalleryImage(-1); // 向右滑 -> 上一张
++                }
++            }
++
++            // 本地原生点击判定，绝不和触控冲突产生Ghost Click喵
++            galleryImg.addEventListener('click', e => {
++                // 如果刚刚发生了长距离滑动，则拒绝触发“点击放大”喵！
++                if (Math.abs(startX - endX) > 10) {
++                    return;
++                }
++                openLightbox(currentGallery[currentGalleryIndex]);
++            });
++        }
++    }
++}
++
++/**
++ * Gallery Navigation Logic
++ */
++window.changeGalleryImage = function(direction) {
++    if (currentGallery.length === 0) return;
++    currentGalleryIndex = (currentGalleryIndex + direction + currentGallery.length) % currentGallery.length;
++
++    const imgEl = document.getElementById('modal-gallery-img');
++    const counterEl = document.getElementById('gallery-counter');
++
++    if (imgEl && counterEl) {
++        imgEl.style.opacity = '0';
++        setTimeout(() => {
++            imgEl.src = currentGallery[currentGalleryIndex];
++            imgEl.style.opacity = '1';
++            counterEl.innerText = `${currentGalleryIndex + 1} / ${currentGallery.length}`;
++        }, 200); 
++    }
++};
++
++/**
++ * Modal Disposal Logic
++ */
++function closeModal(e) {
++    const overlay = document.getElementById('modal-overlay');
++    if (e.target === overlay || e.target.closest('.modal-close')) {
++        overlay.classList.remove('open');
++        setTimeout(() => {
++            const mc = document.getElementById('modal-content');
++            if (mc) mc.innerHTML = '';
++        }, 300);
++    }
++}
++
++// --- 5. Utility & Event Logic ---
++
++/**
++ * Fullscreen Image Lightbox Node (性能优化极致丝滑版 ✨)
++ */
++function openLightbox(imgSrc) {
++    let lightbox = document.getElementById('lightbox-overlay');
++    if (!lightbox) {
++        lightbox = document.createElement('div');
++        lightbox.id = 'lightbox-overlay';
++        
++        // ✨ 优化1：移除极其消耗手机性能的 backdrop-filter，改用 98% 纯黑背景，并开启 opacity 硬件加速
++        lightbox.style.cssText = 'position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(8,10,15,0.98); z-index:10000; display:flex; justify-content:center; align-items:center; cursor:zoom-out; opacity:0; transition:opacity 0.3s ease; display:none; will-change: opacity;';
++        
++        // ✨ 优化2：减小阴影渲染压力，开启 transform 硬件加速，确保动画 60fps 丝滑
++        lightbox.innerHTML = `<img id="lightbox-img" src="" style="max-width:92vw; max-height:92vh; border-radius:6px; box-shadow:0 10px 25px rgba(0,0,0,0.5); transform:scale(0.95); transition:transform 0.3s cubic-bezier(0.165, 0.84, 0.44, 1); will-change: transform; object-fit: contain;">`;
++        
++        document.body.appendChild(lightbox);
++        
++        // 关闭逻辑
++        lightbox.onclick = () => {
++            lightbox.style.opacity = '0';
++            document.getElementById('lightbox-img').style.transform = 'scale(0.95)';
++            setTimeout(() => { lightbox.style.display = 'none'; }, 300);
++        };
++    }
++    
++    const img = document.getElementById('lightbox-img');
++    img.src = imgSrc;
++    lightbox.style.display = 'flex';
++    
++    // ✨ 优化3：使用底层强制回流 (Reflow) 替代玄学定时器，确保动画瞬间顺滑触发
++    void lightbox.offsetWidth;
++    
++    lightbox.style.opacity = '1';
++    img.style.transform = 'scale(1)';
++}
++
++// Keyboard Navigation
++document.addEventListener('keydown', e => {
++    // Escape: Close Lightbox or Modal
++    if (e.key === 'Escape') {
++        const lb = document.getElementById('lightbox-overlay');
++        if (lb && lb.style.display === 'flex') return lb.click();
++        const mo = document.getElementById('modal-overlay');
++        if (mo && mo.classList.contains('open')) closeModal({ target: mo });
++    }
++    // Arrows: Control Modal Gallery
++    if (document.getElementById('modal-gallery-img')) {
++        if (e.key === 'ArrowRight') changeGalleryImage(1);
++        if (e.key === 'ArrowLeft') changeGalleryImage(-1);
++    }
++});
++
++// Scroll Events: Back to Top Trigger
++document.addEventListener('scroll', () => {
++    const btn = document.getElementById('backToTopBtn');
++    if (btn) (window.scrollY > 500) ? btn.classList.add('show') : btn.classList.remove('show');
++});
++
++window.scrollToTop = () => {
++    window.scrollTo({ top: 0, behavior: 'smooth' });
+ }
+\ No newline at end of file
+diff --git a/admin/config.yml b/admin/config.yml
+deleted file mode 100644
+index 9fc2ce6..0000000
+--- a/admin/config.yml
++++ /dev/null
+@@ -1,31 +0,0 @@
+-backend:
+-  name: git-gateway
+-  branch: main # Specify your default GitHub branch (e.g., main or master)
+-
+-# Media file routing configuration
+-media_folder: "Image/uploads" 
+-public_folder: "Image/uploads" 
+-
+-# Data collections definition (Changed to Single JSON File output)
+-collections:
+-  - name: "portfolio_data"
+-    label: "Portfolio Works"
+-    files:
+-      - label: "All Projects"
+-        name: "projects"
+-        file: "data/portfolio.json" # JS can easily read this single file
+-        fields:
+-          - label: "Works List"
+-            name: "works"
+-            widget: "list"
+-            fields:
+-              - {label: "Project Title (EN)", name: "title", widget: "string"}
+-              - {label: "项目标题 (中文)", name: "title_zh", widget: "string", required: false}
+-              - {label: "Category", name: "category", widget: "select", options: ["uiux", "photo", "manipulation", "video", "3d", "graphic"]}
+-              - {label: "Thumbnail Image", name: "thumbnail", widget: "image"}
+-              - {label: "Description (EN)", name: "description", widget: "text"}
+-              - {label: "项目描述 (中文)", name: "description_zh", widget: "text", required: false}
+-              - {label: "Tools Used", name: "tools", widget: "string"}
+-              - {label: "Year", name: "year", widget: "string"}
+-              - {label: "Client / Project Type (EN)", name: "client", widget: "string"}
+-              - {label: "客户/项目类型 (中文)", name: "client_zh", widget: "string", required: false}
+\ No newline at end of file
+diff --git a/admin/index.html b/admin/index.html
+index 0e911fb..5d4032e 100644
+--- a/admin/index.html
++++ b/admin/index.html
+@@ -1,16 +1,832 @@
+ <!DOCTYPE html>
+ <html lang="en">
+ <head>
+-  <meta charset="utf-8" />
+-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+-  <title>DSON Admin | Content Management</title>
+-  <link rel="icon" type="image/png" href="Image/DSON logo.png">
+-  
+-  <!-- Include the Netlify Identity widget for secure authentication -->
+-  <script src="https://identity.netlify.com/v1/netlify-identity-widget.js"></script>
++<meta charset="UTF-8">
++<meta name="viewport" content="width=device-width, initial-scale=1.0">
++<meta name="robots" content="noindex, nofollow">
++<title>Admin Dashboard | DSON</title>
++<link rel="icon" type="image/png" href="../Image/DSON logo.png">
++<link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=Inter:wght@300;400;500;600&family=Noto+Sans+SC:wght@300;400;700&display=swap" rel="stylesheet">
++<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
++<link rel="stylesheet" href="../DSON.css">
++<style>
++  body { padding-bottom: 4rem; }
++  #authGate {
++    position: fixed; inset: 0; background: var(--black);
++    display: flex; align-items: center; justify-content: center;
++    z-index: 9999; color: var(--text-muted); font-size: 0.9rem;
++  }
++
++  /* ---------- Top bar ---------- */
++  .admin-topbar {
++    position: sticky; top: 0; z-index: 50;
++    display: flex; align-items: center; justify-content: space-between;
++    gap: 1rem; flex-wrap: wrap;
++    padding: 1rem 4vw;
++    background: rgba(8,10,15,0.85);
++    backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
++    border-bottom: 1px solid var(--border);
++  }
++  .admin-brand { display: flex; align-items: center; gap: 0.7rem; }
++  .admin-brand img { height: 28px; }
++  .admin-brand span { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 1rem; }
++  .admin-tabs { display: flex; gap: 0.4rem; background: rgba(255,255,255,0.03); padding: 4px; border-radius: 10px; border: 1px solid var(--border); }
++  .admin-tab-btn {
++    background: none; border: none; color: var(--text-muted); font-family: 'Inter', sans-serif;
++    font-size: 0.82rem; font-weight: 600; padding: 0.5rem 1rem; border-radius: 8px; cursor: pointer; transition: all .25s;
++  }
++  .admin-tab-btn.active { background: var(--accent); color: #000; }
++  .admin-actions { display: flex; align-items: center; gap: 0.7rem; }
++  .icon-btn {
++    display: inline-flex; align-items: center; gap: 0.4rem;
++    background: rgba(255,255,255,0.04); border: 1px solid var(--border); color: var(--text-muted);
++    padding: 0.5rem 0.9rem; border-radius: 8px; font-size: 0.8rem; text-decoration: none; cursor: pointer;
++    transition: all .25s; font-family: 'Inter', sans-serif;
++  }
++  .icon-btn:hover { border-color: var(--accent); color: var(--accent); }
++  .icon-btn.danger:hover { border-color: #ff6b6b; color: #ff6b6b; }
++
++  .admin-main { padding: 2rem 4vw; max-width: 1400px; margin: 0 auto; }
++  .panel { display: none; }
++  .panel.active { display: block; }
++
++  .section-title-row { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem; margin-bottom: 1.5rem; }
++  .section-title-row h2 { font-family: 'Syne', sans-serif; font-size: 1.3rem; font-weight: 800; }
++
++  /* ---------- Stat tiles ---------- */
++  .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
++  .stat-tile {
++    background: var(--card-bg); border: 1px solid var(--border); border-radius: 14px; padding: 1.2rem 1.4rem;
++  }
++  .stat-tile .stat-label { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); margin-bottom: 0.5rem; }
++  .stat-tile .stat-value { font-family: 'Syne', sans-serif; font-size: 1.8rem; font-weight: 800; color: var(--accent); }
++
++  .card {
++    background: var(--card-bg); border: 1px solid var(--border); border-radius: 16px; padding: 1.5rem;
++    margin-bottom: 1.5rem;
++  }
++  .card h3 { font-family: 'Syne', sans-serif; font-size: 1rem; font-weight: 700; margin-bottom: 1rem; }
++  .analytics-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 1.5rem; }
++  @media (max-width: 900px) { .analytics-grid { grid-template-columns: 1fr; } }
++
++  #trafficChart { width: 100%; height: 220px; display: block; }
++
++  .bar-row { display: flex; align-items: center; gap: 0.7rem; margin-bottom: 0.7rem; font-size: 0.82rem; }
++  .bar-row .bar-label { flex: 0 0 40%; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
++  .bar-row .bar-track { flex: 1; background: rgba(255,255,255,0.05); border-radius: 6px; height: 10px; overflow: hidden; }
++  .bar-row .bar-fill { height: 100%; background: linear-gradient(90deg, var(--accent-dark), var(--accent)); border-radius: 6px; }
++  .bar-row .bar-value { flex: 0 0 auto; color: #fff; font-weight: 600; min-width: 2.5em; text-align: right; }
++
++  .ga-setup-notice {
++    text-align: center; padding: 3rem 1.5rem; color: var(--text-muted);
++  }
++  .ga-setup-notice i { font-size: 2.2rem; color: var(--accent); margin-bottom: 1rem; display: block; }
++  .ga-setup-notice code {
++    background: rgba(255,255,255,0.06); padding: 0.15rem 0.5rem; border-radius: 5px; color: var(--accent); font-size: 0.85em;
++  }
++
++  /* ---------- Portfolio manager ---------- */
++  .toolbar { display: flex; gap: 0.8rem; flex-wrap: wrap; align-items: center; margin-bottom: 1.5rem; }
++  .toolbar select, .toolbar input[type="text"] {
++    background: rgba(10,10,10,0.5); border: 1px solid rgba(255,255,255,0.08); color: #fff;
++    padding: 0.55rem 0.8rem; border-radius: 8px; font-family: 'Inter', sans-serif; font-size: 0.85rem;
++  }
++  .btn-accent {
++    background: var(--accent); color: #000; border: none; padding: 0.6rem 1.1rem; border-radius: 8px;
++    font-family: 'Syne', sans-serif; font-weight: 800; font-size: 0.8rem; cursor: pointer; letter-spacing: 0.05em;
++    text-transform: uppercase; transition: all .25s;
++  }
++  .btn-accent:hover { background: var(--accent-dark); }
++  .btn-accent:disabled { opacity: 0.5; cursor: not-allowed; }
++  .save-indicator { font-size: 0.8rem; color: var(--text-muted); }
++  .save-indicator.dirty { color: #ffb020; }
++  .save-indicator.saved { color: #4ade80; }
++
++  .works-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
++  .works-table th {
++    text-align: left; color: var(--text-muted); font-weight: 600; font-size: 0.72rem;
++    text-transform: uppercase; letter-spacing: 0.06em; padding: 0.6rem 0.8rem; border-bottom: 1px solid var(--border);
++  }
++  .works-table td { padding: 0.7rem 0.8rem; border-bottom: 1px solid rgba(255,255,255,0.05); vertical-align: middle; }
++  .works-table img.thumb { width: 56px; height: 40px; object-fit: cover; border-radius: 6px; background: #000; }
++  .cat-pill {
++    display: inline-block; font-size: 0.68rem; padding: 0.2rem 0.55rem; border-radius: 20px;
++    background: rgba(0,210,255,0.1); color: var(--accent); text-transform: uppercase; letter-spacing: 0.05em;
++  }
++  .row-actions { display: flex; gap: 0.5rem; }
++  .row-actions button {
++    background: none; border: 1px solid var(--border); color: var(--text-muted); width: 30px; height: 30px;
++    border-radius: 7px; cursor: pointer; transition: all .2s;
++  }
++  .row-actions button:hover { color: var(--accent); border-color: var(--accent); }
++  .row-actions button.del:hover { color: #ff6b6b; border-color: #ff6b6b; }
++
++  /* ---------- Edit modal ---------- */
++  .modal-overlay-admin {
++    display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.75); backdrop-filter: blur(6px);
++    z-index: 200; align-items: flex-start; justify-content: center; overflow-y: auto; padding: 3rem 1rem;
++  }
++  .modal-overlay-admin.open { display: flex; }
++  .edit-modal {
++    background: var(--card-bg); border: 1px solid var(--border); border-radius: 18px; padding: 2rem;
++    width: 100%; max-width: 640px; box-shadow: 0 30px 70px rgba(0,0,0,0.5);
++  }
++  .edit-modal h3 { font-family: 'Syne', sans-serif; font-size: 1.15rem; margin-bottom: 1.4rem; }
++  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
++  .form-grid .full { grid-column: 1 / -1; }
++  .form-field label { display: block; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); margin-bottom: 0.35rem; }
++  .form-field input, .form-field select, .form-field textarea {
++    width: 100%; background: rgba(10,10,10,0.5); border: 1px solid rgba(255,255,255,0.08); color: #fff;
++    padding: 0.6rem 0.8rem; border-radius: 8px; font-family: 'Inter', sans-serif; font-size: 0.85rem; resize: vertical;
++  }
++  .form-field input:focus, .form-field select:focus, .form-field textarea:focus { outline: none; border-color: var(--accent); }
++  .form-field { margin-bottom: 0.9rem; }
++
++  .thumb-upload-box {
++    display: flex; align-items: center; gap: 1rem; margin-top: 0.4rem;
++  }
++  .thumb-preview { width: 90px; height: 60px; object-fit: cover; border-radius: 8px; background: rgba(255,255,255,0.05); border: 1px solid var(--border); }
++  .gallery-grid { display: flex; flex-wrap: wrap; gap: 0.6rem; margin-top: 0.5rem; }
++  .gallery-item { position: relative; width: 74px; height: 54px; }
++  .gallery-item img { width: 100%; height: 100%; object-fit: cover; border-radius: 6px; border: 1px solid var(--border); }
++  .gallery-item .rm-btn {
++    position: absolute; top: -6px; right: -6px; width: 18px; height: 18px; border-radius: 50%;
++    background: #ff4d4d; color: #fff; border: none; font-size: 0.65rem; cursor: pointer; line-height: 18px;
++  }
++  .modal-footer { display: flex; justify-content: flex-end; gap: 0.7rem; margin-top: 1.5rem; }
++  .btn-ghost {
++    background: transparent; border: 1px solid var(--border); color: var(--text-muted); padding: 0.6rem 1.1rem;
++    border-radius: 8px; cursor: pointer; font-size: 0.82rem;
++  }
++  .btn-ghost:hover { color: #fff; }
++  .toast {
++    position: fixed; bottom: 1.5rem; left: 50%; transform: translateX(-50%) translateY(20px);
++    background: var(--card-bg); border: 1px solid var(--accent); color: #fff; padding: 0.8rem 1.4rem;
++    border-radius: 10px; font-size: 0.85rem; z-index: 300; opacity: 0; pointer-events: none; transition: all .3s;
++  }
++  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
++  .toast.error { border-color: #ff6b6b; }
++  .empty-state { text-align: center; color: var(--text-muted); padding: 3rem 1rem; font-size: 0.9rem; }
++</style>
+ </head>
+ <body>
+-  <!-- Include the script that builds the UI and powers Decap CMS -->
+-  <script src="https://unpkg.com/decap-cms@^3.0.0/dist/decap-cms.js"></script>
++
++<div id="authGate">Checking session…</div>
++
++<div id="dashboardRoot" style="display:none;">
++
++  <div class="admin-topbar">
++    <div class="admin-brand">
++      <img src="../Image/Logo_Colour.png" alt="DSON">
++      <span>Admin Dashboard</span>
++    </div>
++    <div class="admin-tabs">
++      <button class="admin-tab-btn active" data-tab="analytics">Analytics</button>
++      <button class="admin-tab-btn" data-tab="portfolio">Portfolio Works</button>
++    </div>
++    <div class="admin-actions">
++      <a href="../portfolio.html" target="_blank" class="icon-btn"><i class="bi bi-box-arrow-up-right"></i> View Site</a>
++      <button class="icon-btn danger" id="logoutBtn"><i class="bi bi-box-arrow-right"></i> Log Out</button>
++    </div>
++  </div>
++
++  <main class="admin-main">
++
++    <!-- ================= ANALYTICS PANEL ================= -->
++    <section class="panel active" id="panel-analytics">
++      <div class="section-title-row">
++        <h2>Traffic Analytics <span style="color:var(--text-muted); font-weight:400; font-size:0.75rem;">(last 30 days)</span></h2>
++        <button class="icon-btn" id="refreshAnalyticsBtn"><i class="bi bi-arrow-clockwise"></i> Refresh</button>
++      </div>
++
++      <div id="analyticsContent">
++        <div class="empty-state">Loading analytics…</div>
++      </div>
++    </section>
++
++    <!-- ================= PORTFOLIO PANEL ================= -->
++    <section class="panel" id="panel-portfolio">
++      <div class="section-title-row">
++        <h2>Portfolio Works</h2>
++        <span class="save-indicator" id="saveIndicator">All changes saved</span>
++      </div>
++
++      <div class="toolbar">
++        <select id="categoryFilter">
++          <option value="all">All Categories</option>
++          <option value="uiux">UI/UX</option>
++          <option value="video">Video</option>
++          <option value="photo">Photo Editing</option>
++          <option value="manipulation">Image Manipulation</option>
++          <option value="3d">3D Modeling</option>
++          <option value="graphic">Graphic Design</option>
++        </select>
++        <input type="text" id="searchInput" placeholder="Search by title...">
++        <button class="btn-accent" id="addWorkBtn"><i class="bi bi-plus-lg"></i> Add New Work</button>
++        <button class="btn-accent" id="saveAllBtn" style="background:#4ade80;"><i class="bi bi-cloud-arrow-up"></i> Save Changes</button>
++      </div>
++
++      <div style="overflow-x:auto;">
++        <table class="works-table">
++          <thead>
++            <tr>
++              <th>Thumbnail</th>
++              <th>Title</th>
++              <th>Category</th>
++              <th>Year</th>
++              <th>Client</th>
++              <th style="text-align:right;">Actions</th>
++            </tr>
++          </thead>
++          <tbody id="worksTableBody"></tbody>
++        </table>
++        <div class="empty-state" id="worksEmptyState" style="display:none;">No works match this filter.</div>
++      </div>
++    </section>
++
++  </main>
++</div>
++
++<!-- ================= ADD/EDIT MODAL ================= -->
++<div class="modal-overlay-admin" id="editModalOverlay">
++  <div class="edit-modal">
++    <h3 id="modalTitle">Add New Work</h3>
++    <form id="workForm">
++      <div class="form-grid">
++        <div class="form-field">
++          <label>Category *</label>
++          <select id="f-category" required>
++            <option value="uiux">UI/UX</option>
++            <option value="video">Video</option>
++            <option value="photo">Photo Editing</option>
++            <option value="manipulation">Image Manipulation</option>
++            <option value="3d">3D Modeling</option>
++            <option value="graphic">Graphic Design</option>
++          </select>
++        </div>
++        <div class="form-field">
++          <label>Year *</label>
++          <input type="text" id="f-year" placeholder="2026" required>
++        </div>
++
++        <div class="form-field">
++          <label>Title (EN) *</label>
++          <input type="text" id="f-title" required>
++        </div>
++        <div class="form-field">
++          <label>标题 (中文)</label>
++          <input type="text" id="f-title_zh">
++        </div>
++
++        <div class="form-field full">
++          <label>Description (EN) *</label>
++          <textarea id="f-description" rows="2" required></textarea>
++        </div>
++        <div class="form-field full">
++          <label>描述 (中文)</label>
++          <textarea id="f-description_zh" rows="2"></textarea>
++        </div>
++
++        <div class="form-field">
++          <label>Tools *</label>
++          <input type="text" id="f-tools" placeholder="Adobe Photoshop" required>
++        </div>
++        <div class="form-field">
++          <label>Client / Project Type (EN) *</label>
++          <input type="text" id="f-client" required>
++        </div>
++        <div class="form-field full">
++          <label>客户/项目类型 (中文)</label>
++          <input type="text" id="f-client_zh">
++        </div>
++
++        <div class="form-field">
++          <label>YouTube Video ID <span style="opacity:.6;">(optional)</span></label>
++          <input type="text" id="f-youtube_id" placeholder="e.g. mwwu9w_wWsA">
++        </div>
++        <div class="form-field">
++          <label>Figma Prototype Link <span style="opacity:.6;">(optional)</span></label>
++          <input type="text" id="f-figma_link" placeholder="https://www.figma.com/proto/...">
++        </div>
++
++        <div class="form-field full">
++          <label>Thumbnail Image *</label>
++          <div class="thumb-upload-box">
++            <img id="thumbPreview" class="thumb-preview" src="" alt="">
++            <div>
++              <input type="file" id="thumbFileInput" accept="image/*" style="display:none;">
++              <button type="button" class="icon-btn" id="thumbUploadBtn"><i class="bi bi-upload"></i> Upload Image</button>
++              <div id="thumbUploadStatus" style="font-size:0.72rem; color:var(--text-muted); margin-top:0.3rem;"></div>
++            </div>
++          </div>
++          <input type="hidden" id="f-thumbnail">
++        </div>
++
++        <div class="form-field full">
++          <label>Gallery Images <span style="opacity:.6;">(optional, for photo/3D/graphic slideshows)</span></label>
++          <div class="gallery-grid" id="galleryGrid"></div>
++          <input type="file" id="galleryFileInput" accept="image/*" style="display:none;">
++          <button type="button" class="icon-btn" id="galleryUploadBtn" style="margin-top:0.6rem;"><i class="bi bi-images"></i> Add Gallery Image</button>
++        </div>
++      </div>
++
++      <div class="modal-footer">
++        <button type="button" class="btn-ghost" id="cancelModalBtn">Cancel</button>
++        <button type="submit" class="btn-accent">Save Work</button>
++      </div>
++    </form>
++  </div>
++</div>
++
++<div class="toast" id="toast"></div>
++
++<script>
++/* =========================================================
++   0. Auth gate
++   ========================================================= */
++(async function authGate() {
++  try {
++    const resp = await fetch('/api/admin/me');
++    const data = await resp.json();
++    if (!data.authenticated) {
++      window.location.href = 'login.html';
++      return;
++    }
++    document.getElementById('authGate').style.display = 'none';
++    document.getElementById('dashboardRoot').style.display = 'block';
++    initDashboard();
++  } catch (err) {
++    window.location.href = 'login.html';
++  }
++})();
++
++document.getElementById('logoutBtn').addEventListener('click', async () => {
++  await fetch('/api/admin/logout', { method: 'POST' });
++  window.location.href = 'login.html';
++});
++
++/* =========================================================
++   1. Tabs
++   ========================================================= */
++document.querySelectorAll('.admin-tab-btn').forEach(btn => {
++  btn.addEventListener('click', () => {
++    document.querySelectorAll('.admin-tab-btn').forEach(b => b.classList.remove('active'));
++    btn.classList.add('active');
++    document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
++    document.getElementById('panel-' + btn.dataset.tab).classList.add('active');
++    if (btn.dataset.tab === 'analytics') loadAnalytics();
++  });
++});
++
++/* =========================================================
++   2. Toast helper
++   ========================================================= */
++function showToast(msg, isError) {
++  const t = document.getElementById('toast');
++  t.textContent = msg;
++  t.className = 'toast show' + (isError ? ' error' : '');
++  setTimeout(() => { t.className = 'toast'; }, 3200);
++}
++
++/* =========================================================
++   3. Analytics
++   ========================================================= */
++let analyticsLoaded = false;
++
++async function loadAnalytics() {
++  const el = document.getElementById('analyticsContent');
++  el.innerHTML = '<div class="empty-state">Loading analytics…</div>';
++  try {
++    const resp = await fetch('/api/admin/analytics');
++    const data = await resp.json();
++
++    if (!data.configured) {
++      el.innerHTML = `
++        <div class="ga-setup-notice">
++          <i class="bi bi-bar-chart-line"></i>
++          <h3 style="color:#fff; margin-bottom:0.6rem; font-family:'Syne',sans-serif;">Google Analytics not connected yet</h3>
++          <p style="max-width:480px; margin:0 auto 1rem;">
++            Add <code>GA_PROPERTY_ID</code>, <code>GA_CLIENT_EMAIL</code> and <code>GA_PRIVATE_KEY</code>
++            as environment variables in your Vercel project, then refresh this page to see real traffic data here.
++          </p>
++        </div>`;
++      return;
++    }
++
++    if (data.error) {
++      el.innerHTML = `<div class="ga-setup-notice"><i class="bi bi-exclamation-triangle"></i>
++        <h3 style="color:#fff;">Couldn't load analytics</h3><p>${escapeHtml(data.error)}</p></div>`;
++      return;
++    }
++
++    renderAnalytics(data);
++  } catch (err) {
++    el.innerHTML = '<div class="ga-setup-notice"><i class="bi bi-exclamation-triangle"></i><p>Network error loading analytics.</p></div>';
++  }
++}
++
++function gaVal(report, rowIndex, metricIndex) {
++  try { return Number(report.rows[rowIndex].metricValues[metricIndex].value) || 0; }
++  catch { return 0; }
++}
++
++function renderAnalytics(data) {
++  const el = document.getElementById('analyticsContent');
++  const s = data.summary;
++  const hasSummaryRow = s.rows && s.rows.length > 0;
++  const users = hasSummaryRow ? gaVal(s, 0, 0) : 0;
++  const views = hasSummaryRow ? gaVal(s, 0, 1) : 0;
++  const sessions = hasSummaryRow ? gaVal(s, 0, 2) : 0;
++  const avgDur = hasSummaryRow ? gaVal(s, 0, 3) : 0;
++
++  el.innerHTML = `
++    <div class="stat-grid">
++      <div class="stat-tile"><div class="stat-label">Active Users</div><div class="stat-value">${users.toLocaleString()}</div></div>
++      <div class="stat-tile"><div class="stat-label">Page Views</div><div class="stat-value">${views.toLocaleString()}</div></div>
++      <div class="stat-tile"><div class="stat-label">Sessions</div><div class="stat-value">${sessions.toLocaleString()}</div></div>
++      <div class="stat-tile"><div class="stat-label">Avg. Session</div><div class="stat-value">${formatDuration(avgDur)}</div></div>
++    </div>
++    <div class="analytics-grid">
++      <div class="card">
++        <h3>Users &amp; Page Views Over Time</h3>
++        <canvas id="trafficChart"></canvas>
++      </div>
++      <div class="card">
++        <h3>Top Pages</h3>
++        <div id="topPagesList"></div>
++      </div>
++      <div class="card">
++        <h3>Device Breakdown</h3>
++        <div id="deviceList"></div>
++      </div>
++      <div class="card">
++        <h3>Top Countries</h3>
++        <div id="countryList"></div>
++      </div>
++    </div>
++  `;
++
++  drawTrafficChart(data.byDate);
++  renderBarList('topPagesList', data.topPages, (row) => row.dimensionValues[0].value.replace(/\.html$/, '') || '/');
++  renderBarList('deviceList', data.devices, (row) => row.dimensionValues[0].value);
++  renderBarList('countryList', data.countries, (row) => row.dimensionValues[0].value);
++}
++
++function renderBarList(containerId, report, labelFn) {
++  const container = document.getElementById(containerId);
++  const rows = (report && report.rows) || [];
++  if (rows.length === 0) {
++    container.innerHTML = '<div class="empty-state" style="padding:1rem;">No data yet</div>';
++    return;
++  }
++  const max = Math.max(...rows.map(r => Number(r.metricValues[0].value) || 0), 1);
++  container.innerHTML = rows.map(r => {
++    const val = Number(r.metricValues[0].value) || 0;
++    const pct = Math.max(4, Math.round((val / max) * 100));
++    return `<div class="bar-row">
++      <div class="bar-label" title="${escapeHtml(labelFn(r))}">${escapeHtml(labelFn(r))}</div>
++      <div class="bar-track"><div class="bar-fill" style="width:${pct}%"></div></div>
++      <div class="bar-value">${val.toLocaleString()}</div>
++    </div>`;
++  }).join('');
++}
++
++function drawTrafficChart(report) {
++  const canvas = document.getElementById('trafficChart');
++  if (!canvas) return;
++  const rows = (report && report.rows) || [];
++  const dpr = window.devicePixelRatio || 1;
++  const cssWidth = canvas.parentElement.clientWidth - 48;
++  const cssHeight = 220;
++  canvas.width = cssWidth * dpr;
++  canvas.height = cssHeight * dpr;
++  canvas.style.width = cssWidth + 'px';
++  canvas.style.height = cssHeight + 'px';
++  const ctx = canvas.getContext('2d');
++  ctx.scale(dpr, dpr);
++  ctx.clearRect(0, 0, cssWidth, cssHeight);
++
++  if (rows.length === 0) {
++    ctx.fillStyle = '#8892b0';
++    ctx.font = '13px Inter';
++    ctx.fillText('No data yet', 10, cssHeight / 2);
++    return;
++  }
++
++  const values = rows.map(r => Number(r.metricValues[1].value) || 0); // pageviews
++  const max = Math.max(...values, 1);
++  const padding = 20;
++  const w = cssWidth - padding * 2;
++  const h = cssHeight - padding * 2;
++  const stepX = w / Math.max(values.length - 1, 1);
++
++  // gridlines
++  ctx.strokeStyle = 'rgba(255,255,255,0.06)';
++  ctx.lineWidth = 1;
++  for (let i = 0; i <= 3; i++) {
++    const y = padding + (h / 3) * i;
++    ctx.beginPath(); ctx.moveTo(padding, y); ctx.lineTo(cssWidth - padding, y); ctx.stroke();
++  }
++
++  // area fill
++  const grad = ctx.createLinearGradient(0, padding, 0, padding + h);
++  grad.addColorStop(0, 'rgba(0,210,255,0.35)');
++  grad.addColorStop(1, 'rgba(0,210,255,0)');
++  ctx.beginPath();
++  values.forEach((v, i) => {
++    const x = padding + i * stepX;
++    const y = padding + h - (v / max) * h;
++    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
++  });
++  ctx.lineTo(padding + (values.length - 1) * stepX, padding + h);
++  ctx.lineTo(padding, padding + h);
++  ctx.closePath();
++  ctx.fillStyle = grad;
++  ctx.fill();
++
++  // line
++  ctx.beginPath();
++  values.forEach((v, i) => {
++    const x = padding + i * stepX;
++    const y = padding + h - (v / max) * h;
++    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
++  });
++  ctx.strokeStyle = '#00d2ff';
++  ctx.lineWidth = 2;
++  ctx.stroke();
++}
++
++function formatDuration(seconds) {
++  const m = Math.floor(seconds / 60);
++  const s = Math.round(seconds % 60);
++  return `${m}m ${s}s`;
++}
++
++function escapeHtml(str) {
++  return String(str).replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
++}
++
++document.getElementById('refreshAnalyticsBtn').addEventListener('click', loadAnalytics);
++
++/* =========================================================
++   4. Portfolio works manager
++   ========================================================= */
++let worksData = [];
++let isDirty = false;
++let editingIndex = null; // null = adding new
++let currentGallery = [];
++
++function setDirty(dirty) {
++  isDirty = dirty;
++  const ind = document.getElementById('saveIndicator');
++  if (dirty) {
++    ind.textContent = 'Unsaved changes';
++    ind.className = 'save-indicator dirty';
++  } else {
++    ind.textContent = 'All changes saved';
++    ind.className = 'save-indicator saved';
++  }
++}
++
++async function loadWorks() {
++  try {
++    const resp = await fetch('/api/portfolio');
++    const data = await resp.json();
++    worksData = (data && data.works) || [];
++    renderWorksTable();
++  } catch (err) {
++    showToast('Failed to load portfolio data.', true);
++  }
++}
++
++const catLabels = {
++  uiux: 'UI/UX', video: 'Video', photo: 'Photo Editing',
++  manipulation: 'Image Manipulation', '3d': '3D Modeling', graphic: 'Graphic Design'
++};
++
++function renderWorksTable() {
++  const tbody = document.getElementById('worksTableBody');
++  const filterCat = document.getElementById('categoryFilter').value;
++  const search = document.getElementById('searchInput').value.trim().toLowerCase();
++
++  const filtered = worksData
++    .map((w, idx) => ({ w, idx }))
++    .filter(({ w }) => (filterCat === 'all' || w.category === filterCat))
++    .filter(({ w }) => !search || (w.title || '').toLowerCase().includes(search) || (w.title_zh || '').toLowerCase().includes(search));
++
++  document.getElementById('worksEmptyState').style.display = filtered.length ? 'none' : 'block';
++
++  tbody.innerHTML = filtered.map(({ w, idx }) => `
++    <tr>
++      <td><img class="thumb" src="${escapeHtml(w.thumbnail || '')}" onerror="this.src='../Image/Logo_Colour.png'"></td>
++      <td>${escapeHtml(w.title || '')}</td>
++      <td><span class="cat-pill">${catLabels[w.category] || w.category}</span></td>
++      <td>${escapeHtml(w.year || '')}</td>
++      <td>${escapeHtml(w.client || '')}</td>
++      <td>
++        <div class="row-actions" style="justify-content:flex-end;">
++          <button onclick="editWork(${idx})" title="Edit"><i class="bi bi-pencil"></i></button>
++          <button class="del" onclick="deleteWork(${idx})" title="Delete"><i class="bi bi-trash"></i></button>
++        </div>
++      </td>
++    </tr>
++  `).join('');
++}
++
++document.getElementById('categoryFilter').addEventListener('change', renderWorksTable);
++document.getElementById('searchInput').addEventListener('input', renderWorksTable);
++
++function deleteWork(idx) {
++  if (!confirm('Delete "' + (worksData[idx].title || 'this work') + '"? This can\'t be undone once you save.')) return;
++  worksData.splice(idx, 1);
++  renderWorksTable();
++  setDirty(true);
++}
++
++function openModal(isEdit) {
++  document.getElementById('modalTitle').textContent = isEdit ? 'Edit Work' : 'Add New Work';
++  document.getElementById('editModalOverlay').classList.add('open');
++}
++function closeModal() {
++  document.getElementById('editModalOverlay').classList.remove('open');
++}
++
++function editWork(idx) {
++  editingIndex = idx;
++  const w = worksData[idx];
++  document.getElementById('f-category').value = w.category || 'uiux';
++  document.getElementById('f-year').value = w.year || '';
++  document.getElementById('f-title').value = w.title || '';
++  document.getElementById('f-title_zh').value = w.title_zh || '';
++  document.getElementById('f-description').value = w.description || '';
++  document.getElementById('f-description_zh').value = w.description_zh || '';
++  document.getElementById('f-tools').value = w.tools || '';
++  document.getElementById('f-client').value = w.client || '';
++  document.getElementById('f-client_zh').value = w.client_zh || '';
++  document.getElementById('f-youtube_id').value = w.youtube_id || '';
++  document.getElementById('f-figma_link').value = w.figma_link || '';
++  document.getElementById('f-thumbnail').value = w.thumbnail || '';
++  document.getElementById('thumbPreview').src = w.thumbnail || '';
++  currentGallery = Array.isArray(w.gallery) ? [...w.gallery] : [];
++  renderGalleryGrid();
++  openModal(true);
++}
++
++document.getElementById('addWorkBtn').addEventListener('click', () => {
++  editingIndex = null;
++  document.getElementById('workForm').reset();
++  document.getElementById('f-thumbnail').value = '';
++  document.getElementById('thumbPreview').src = '';
++  currentGallery = [];
++  renderGalleryGrid();
++  openModal(false);
++});
++
++document.getElementById('cancelModalBtn').addEventListener('click', closeModal);
++document.getElementById('editModalOverlay').addEventListener('click', (e) => {
++  if (e.target.id === 'editModalOverlay') closeModal();
++});
++
++function renderGalleryGrid() {
++  const grid = document.getElementById('galleryGrid');
++  grid.innerHTML = currentGallery.map((url, i) => `
++    <div class="gallery-item">
++      <img src="${escapeHtml(url)}">
++      <button type="button" class="rm-btn" onclick="removeGalleryImage(${i})">✕</button>
++    </div>
++  `).join('');
++}
++function removeGalleryImage(i) {
++  currentGallery.splice(i, 1);
++  renderGalleryGrid();
++}
++
++/* ---- Image upload helpers (base64 JSON upload, max ~3.5MB) ---- */
++function fileToBase64(file) {
++  return new Promise((resolve, reject) => {
++    const reader = new FileReader();
++    reader.onload = () => resolve(reader.result.split(',')[1]);
++    reader.onerror = reject;
++    reader.readAsDataURL(file);
++  });
++}
++
++async function uploadImage(file, statusEl) {
++  if (file.size > 3.5 * 1024 * 1024) {
++    throw new Error('File is ' + (file.size / 1024 / 1024).toFixed(1) + 'MB — please compress/resize it under 3.5MB first.');
++  }
++  if (statusEl) statusEl.textContent = 'Uploading…';
++  const dataBase64 = await fileToBase64(file);
++  const resp = await fetch('/api/admin/upload', {
++    method: 'POST',
++    headers: { 'Content-Type': 'application/json' },
++    body: JSON.stringify({ filename: file.name, contentType: file.type, dataBase64 }),
++  });
++  const data = await resp.json();
++  if (!resp.ok) throw new Error(data.error || 'Upload failed.');
++  if (statusEl) statusEl.textContent = 'Uploaded ✓';
++  return data.url;
++}
++
++document.getElementById('thumbUploadBtn').addEventListener('click', () => document.getElementById('thumbFileInput').click());
++document.getElementById('thumbFileInput').addEventListener('change', async (e) => {
++  const file = e.target.files[0];
++  if (!file) return;
++  const statusEl = document.getElementById('thumbUploadStatus');
++  try {
++    const url = await uploadImage(file, statusEl);
++    document.getElementById('f-thumbnail').value = url;
++    document.getElementById('thumbPreview').src = url;
++  } catch (err) {
++    statusEl.textContent = err.message;
++    showToast(err.message, true);
++  }
++  e.target.value = '';
++});
++
++document.getElementById('galleryUploadBtn').addEventListener('click', () => document.getElementById('galleryFileInput').click());
++document.getElementById('galleryFileInput').addEventListener('change', async (e) => {
++  const file = e.target.files[0];
++  if (!file) return;
++  try {
++    const url = await uploadImage(file, null);
++    currentGallery.push(url);
++    renderGalleryGrid();
++  } catch (err) {
++    showToast(err.message, true);
++  }
++  e.target.value = '';
++});
++
++document.getElementById('workForm').addEventListener('submit', (e) => {
++  e.preventDefault();
++  const thumbnail = document.getElementById('f-thumbnail').value.trim();
++  if (!thumbnail) {
++    showToast('Please upload a thumbnail image first.', true);
++    return;
++  }
++  const work = {
++    category: document.getElementById('f-category').value,
++    title: document.getElementById('f-title').value.trim(),
++    title_zh: document.getElementById('f-title_zh').value.trim(),
++    description: document.getElementById('f-description').value.trim(),
++    description_zh: document.getElementById('f-description_zh').value.trim(),
++    tools: document.getElementById('f-tools').value.trim(),
++    year: document.getElementById('f-year').value.trim(),
++    client: document.getElementById('f-client').value.trim(),
++    client_zh: document.getElementById('f-client_zh').value.trim(),
++    thumbnail,
++  };
++  const youtubeId = document.getElementById('f-youtube_id').value.trim();
++  const figmaLink = document.getElementById('f-figma_link').value.trim();
++  if (youtubeId) work.youtube_id = youtubeId;
++  if (figmaLink) work.figma_link = figmaLink;
++  if (currentGallery.length) work.gallery = [...currentGallery];
++
++  if (editingIndex === null) {
++    worksData.unshift(work); // newest-first, matches homepage "latest per category" logic
++  } else {
++    worksData[editingIndex] = work;
++  }
++  renderWorksTable();
++  setDirty(true);
++  closeModal();
++});
++
++document.getElementById('saveAllBtn').addEventListener('click', async () => {
++  const btn = document.getElementById('saveAllBtn');
++  btn.disabled = true;
++  btn.textContent = 'Saving…';
++  try {
++    const resp = await fetch('/api/portfolio', {
++      method: 'POST',
++      headers: { 'Content-Type': 'application/json' },
++      body: JSON.stringify({ works: worksData }),
++    });
++    const data = await resp.json();
++    if (!resp.ok) throw new Error(data.error || 'Save failed.');
++    setDirty(false);
++    showToast('Saved ' + data.count + ' works — live on the site now.');
++  } catch (err) {
++    showToast(err.message, true);
++  } finally {
++    btn.disabled = false;
++    btn.innerHTML = '<i class="bi bi-cloud-arrow-up"></i> Save Changes';
++  }
++});
++
++window.addEventListener('beforeunload', (e) => {
++  if (isDirty) { e.preventDefault(); e.returnValue = ''; }
++});
++
++/* =========================================================
++   5. Init
++   ========================================================= */
++function initDashboard() {
++  loadWorks();
++  loadAnalytics();
++}
++</script>
++
+ </body>
+-</html>
+\ No newline at end of file
++</html>
+diff --git a/admin/login.html b/admin/login.html
+new file mode 100644
+index 0000000..0ba5baa
+--- /dev/null
++++ b/admin/login.html
+@@ -0,0 +1,163 @@
++<!DOCTYPE html>
++<html lang="en">
++<head>
++<meta charset="UTF-8">
++<meta name="viewport" content="width=device-width, initial-scale=1.0">
++<meta name="robots" content="noindex, nofollow">
++<title>Admin Login | DSON</title>
++<link rel="icon" type="image/png" href="../Image/DSON logo.png">
++<link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=Inter:wght@300;400;500;600&family=Noto+Sans+SC:wght@300;400;700&display=swap" rel="stylesheet">
++<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
++<link rel="stylesheet" href="../DSON.css">
++<style>
++  body {
++    min-height: 100vh;
++    display: flex;
++    align-items: center;
++    justify-content: center;
++    padding: 1.5rem;
++  }
++  .login-card {
++    width: 100%;
++    max-width: 380px;
++    background: rgba(255,255,255,0.02);
++    backdrop-filter: blur(16px);
++    -webkit-backdrop-filter: blur(16px);
++    border: 1px solid var(--border);
++    border-radius: 20px;
++    padding: 2.5rem 2rem;
++    box-shadow: 0 20px 50px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.08);
++    text-align: center;
++  }
++  .login-card img { height: 40px; margin-bottom: 1.5rem; }
++  .login-card h1 {
++    font-family: 'Syne', sans-serif;
++    font-size: 1.4rem;
++    font-weight: 800;
++    margin-bottom: 0.4rem;
++  }
++  .login-card p.sub { color: var(--text-muted); font-size: 0.85rem; margin-bottom: 1.8rem; }
++  .field { text-align: left; margin-bottom: 1.2rem; }
++  .field label {
++    display: block;
++    font-size: 0.72rem;
++    text-transform: uppercase;
++    letter-spacing: 0.1em;
++    color: var(--text-muted);
++    margin-bottom: 0.4rem;
++    font-weight: 600;
++  }
++  .field input {
++    width: 100%;
++    padding: 0.75rem 1rem;
++    background: rgba(10,10,10,0.5);
++    border: 1px solid rgba(255,255,255,0.08);
++    border-radius: 10px;
++    color: #fff;
++    font-family: 'Inter', sans-serif;
++    font-size: 0.95rem;
++    outline: none;
++    transition: all 0.3s ease;
++  }
++  .field input:focus {
++    border-color: var(--accent);
++    box-shadow: 0 0 0 4px rgba(0,210,255,0.15);
++  }
++  .login-btn {
++    width: 100%;
++    padding: 0.85rem;
++    background: linear-gradient(135deg, var(--accent) 0%, #0077b6 100%);
++    color: #000;
++    font-family: 'Syne', sans-serif;
++    font-weight: 800;
++    font-size: 0.9rem;
++    text-transform: uppercase;
++    letter-spacing: 0.12em;
++    border: none;
++    border-radius: 10px;
++    cursor: pointer;
++    transition: all 0.3s ease;
++  }
++  .login-btn:hover { transform: translateY(-2px); box-shadow: 0 10px 25px rgba(0,210,255,0.3); }
++  .login-btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
++  .error-msg {
++    display: none;
++    color: #ff6b6b;
++    font-size: 0.82rem;
++    margin-top: 1rem;
++    padding: 0.7rem;
++    background: rgba(255,77,77,0.08);
++    border: 1px solid rgba(255,77,77,0.25);
++    border-radius: 8px;
++  }
++  .back-link {
++    display: inline-block;
++    margin-top: 1.6rem;
++    color: var(--text-muted);
++    font-size: 0.8rem;
++    text-decoration: none;
++  }
++  .back-link:hover { color: var(--accent); }
++</style>
++</head>
++<body>
++
++<div class="login-card">
++  <img src="../Image/Logo_Colour.png" alt="DSON logo">
++  <h1>Admin Dashboard</h1>
++  <p class="sub">Enter your admin password to continue</p>
++
++  <form id="loginForm">
++    <div class="field">
++      <label for="password">Password</label>
++      <input type="password" id="password" name="password" autocomplete="current-password" required autofocus>
++    </div>
++    <button type="submit" class="login-btn" id="loginBtn">Log In</button>
++    <div class="error-msg" id="errorMsg"></div>
++  </form>
++
++  <a href="../index.html" class="back-link"><i class="bi bi-arrow-left"></i> Back to site</a>
++</div>
++
++<script>
++  // If already logged in, skip straight to the dashboard.
++  fetch('/api/admin/me').then(r => r.json()).then(d => {
++    if (d.authenticated) window.location.href = 'index.html';
++  }).catch(() => {});
++
++  const form = document.getElementById('loginForm');
++  const btn = document.getElementById('loginBtn');
++  const errorMsg = document.getElementById('errorMsg');
++
++  form.addEventListener('submit', async (e) => {
++    e.preventDefault();
++    errorMsg.style.display = 'none';
++    btn.disabled = true;
++    btn.textContent = 'Checking...';
++
++    try {
++      const password = document.getElementById('password').value;
++      const resp = await fetch('/api/admin/login', {
++        method: 'POST',
++        headers: { 'Content-Type': 'application/json' },
++        body: JSON.stringify({ password }),
++      });
++      const data = await resp.json();
++      if (resp.ok && data.ok) {
++        window.location.href = 'index.html';
++      } else {
++        errorMsg.textContent = data.error || 'Login failed. Please try again.';
++        errorMsg.style.display = 'block';
++      }
++    } catch (err) {
++      errorMsg.textContent = 'Network error. Please try again.';
++      errorMsg.style.display = 'block';
++    } finally {
++      btn.disabled = false;
++      btn.textContent = 'Log In';
++    }
++  });
++</script>
++
++</body>
++</html>
+diff --git a/api/admin/analytics.js b/api/admin/analytics.js
+new file mode 100644
+index 0000000..b0b82a1
+--- /dev/null
++++ b/api/admin/analytics.js
+@@ -0,0 +1,63 @@
++const { requireAuth } = require('../../lib/auth');
++const { isConfigured, getAccessToken, runReport } = require('../../lib/ga4');
++
++module.exports = async (req, res) => {
++  if (!requireAuth(req, res)) return;
++
++  if (!isConfigured()) {
++    return res.status(200).json({ configured: false });
++  }
++
++  try {
++    const propertyId = process.env.GA_PROPERTY_ID;
++    const accessToken = await getAccessToken();
++    const range = { startDate: '30daysAgo', endDate: 'today' };
++
++    const [summary, byDate, topPages, devices, countries] = await Promise.all([
++      runReport(accessToken, propertyId, {
++        dateRanges: [range],
++        metrics: [
++          { name: 'activeUsers' },
++          { name: 'screenPageViews' },
++          { name: 'sessions' },
++          { name: 'averageSessionDuration' },
++        ],
++      }),
++      runReport(accessToken, propertyId, {
++        dateRanges: [range],
++        dimensions: [{ name: 'date' }],
++        metrics: [{ name: 'activeUsers' }, { name: 'screenPageViews' }],
++        orderBys: [{ dimension: { dimensionName: 'date' } }],
++      }),
++      runReport(accessToken, propertyId, {
++        dateRanges: [range],
++        dimensions: [{ name: 'pagePath' }],
++        metrics: [{ name: 'screenPageViews' }],
++        orderBys: [{ metric: { metricName: 'screenPageViews' }, desc: true }],
++        limit: 8,
++      }),
++      runReport(accessToken, propertyId, {
++        dateRanges: [range],
++        dimensions: [{ name: 'deviceCategory' }],
++        metrics: [{ name: 'activeUsers' }],
++      }),
++      runReport(accessToken, propertyId, {
++        dateRanges: [range],
++        dimensions: [{ name: 'country' }],
++        metrics: [{ name: 'activeUsers' }],
++        orderBys: [{ metric: { metricName: 'activeUsers' }, desc: true }],
++        limit: 8,
++      }),
++    ]);
++
++    res.setHeader('Cache-Control', 'no-store');
++    return res.status(200).json({ configured: true, summary, byDate, topPages, devices, countries });
++  } catch (err) {
++    console.error('GA4 analytics fetch failed:', err);
++    return res.status(502).json({
++      configured: true,
++      error: 'Failed to fetch analytics from Google.',
++      detail: String((err && err.message) || err),
++    });
++  }
++};
+diff --git a/api/admin/login.js b/api/admin/login.js
+new file mode 100644
+index 0000000..c635c2c
+--- /dev/null
++++ b/api/admin/login.js
+@@ -0,0 +1,30 @@
++const crypto = require('crypto');
++const { createSessionToken, setSessionCookie } = require('../../lib/auth');
++
++module.exports = async (req, res) => {
++  if (req.method !== 'POST') {
++    res.setHeader('Allow', 'POST');
++    return res.status(405).json({ error: 'Method not allowed' });
++  }
++
++  const adminPassword = process.env.ADMIN_PASSWORD;
++  if (!adminPassword) {
++    return res.status(500).json({ error: 'ADMIN_PASSWORD is not configured on the server.' });
++  }
++
++  const { password } = req.body || {};
++  if (typeof password !== 'string' || password.length === 0) {
++    return res.status(400).json({ error: 'Password is required.' });
++  }
++
++  const a = Buffer.from(password);
++  const b = Buffer.from(adminPassword);
++  const match = a.length === b.length && crypto.timingSafeEqual(a, b);
++
++  if (!match) {
++    return res.status(401).json({ error: 'Incorrect password.' });
++  }
++
++  setSessionCookie(res, createSessionToken());
++  return res.status(200).json({ ok: true });
++};
+diff --git a/api/admin/logout.js b/api/admin/logout.js
+new file mode 100644
+index 0000000..4639ece
+--- /dev/null
++++ b/api/admin/logout.js
+@@ -0,0 +1,6 @@
++const { clearSessionCookie } = require('../../lib/auth');
++
++module.exports = async (req, res) => {
++  clearSessionCookie(res);
++  return res.status(200).json({ ok: true });
++};
+diff --git a/api/admin/me.js b/api/admin/me.js
+new file mode 100644
+index 0000000..9c9c693
+--- /dev/null
++++ b/api/admin/me.js
+@@ -0,0 +1,6 @@
++const { isAuthenticated } = require('../../lib/auth');
++
++module.exports = async (req, res) => {
++  res.setHeader('Cache-Control', 'no-store');
++  return res.status(200).json({ authenticated: isAuthenticated(req) });
++};
+diff --git a/api/admin/upload.js b/api/admin/upload.js
+new file mode 100644
+index 0000000..08e57e5
+--- /dev/null
++++ b/api/admin/upload.js
+@@ -0,0 +1,43 @@
++const { put } = require('@vercel/blob');
++const { requireAuth } = require('../../lib/auth');
++
++// Vercel enforces a hard ~4.5MB request body limit on serverless
++// function invocations, and base64 inflates payload size by ~37%.
++// Cap the raw file size well under that so uploads fail with a clear
++// message instead of a generic platform error.
++const MAX_RAW_BYTES = 3.5 * 1024 * 1024;
++
++module.exports = async (req, res) => {
++  if (req.method !== 'POST') {
++    res.setHeader('Allow', 'POST');
++    return res.status(405).json({ error: 'Method not allowed' });
++  }
++  if (!requireAuth(req, res)) return;
++
++  try {
++    const { filename, contentType, dataBase64 } = req.body || {};
++    if (!filename || !dataBase64) {
++      return res.status(400).json({ error: 'filename and dataBase64 are required.' });
++    }
++
++    const buffer = Buffer.from(dataBase64, 'base64');
++    if (buffer.length > MAX_RAW_BYTES) {
++      return res.status(413).json({
++        error: `Image too large (${(buffer.length / 1024 / 1024).toFixed(1)}MB). Please keep uploads under 3.5MB — resize/compress the image first.`,
++      });
++    }
++
++    const safeName = String(filename).replace(/[^a-zA-Z0-9._-]/g, '_');
++    const blob = await put(`uploads/${Date.now()}-${safeName}`, buffer, {
++      access: 'public',
++      contentType: contentType || 'application/octet-stream',
++      token: process.env.BLOB_READ_WRITE_TOKEN,
++      addRandomSuffix: true,
++    });
++
++    return res.status(200).json({ url: blob.url });
++  } catch (err) {
++    console.error('Upload failed:', err);
++    return res.status(500).json({ error: 'Upload failed.' });
++  }
++};
+diff --git a/api/portfolio.js b/api/portfolio.js
+new file mode 100644
+index 0000000..51d08b4
+--- /dev/null
++++ b/api/portfolio.js
+@@ -0,0 +1,23 @@
++const { readPortfolio, writePortfolio } = require('../lib/portfolio-store');
++const { requireAuth } = require('../lib/auth');
++
++module.exports = async (req, res) => {
++  if (req.method === 'GET') {
++    const data = await readPortfolio();
++    res.setHeader('Cache-Control', 'no-store');
++    return res.status(200).json(data);
++  }
++
++  if (req.method === 'POST' || req.method === 'PUT') {
++    if (!requireAuth(req, res)) return;
++    const body = req.body;
++    if (!body || !Array.isArray(body.works)) {
++      return res.status(400).json({ error: 'Body must be { works: [...] }' });
++    }
++    await writePortfolio({ works: body.works });
++    return res.status(200).json({ ok: true, count: body.works.length });
++  }
++
++  res.setHeader('Allow', 'GET, POST, PUT');
++  return res.status(405).json({ error: 'Method not allowed' });
++};
+diff --git a/contact.html b/contact.html
+index 7098f61..8e9297d 100644
+--- a/contact.html
++++ b/contact.html
+@@ -28,6 +28,7 @@
+   
+   <link href="https://unpkg.com/aos@2.3.1/dist/aos.css" rel="stylesheet">
+   <link rel="stylesheet" href="DSON.css">
++  <script src="ga4-tracking.js"></script>
+ 
+   <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
+   <script type="text/javascript">
+diff --git a/ga4-tracking.js b/ga4-tracking.js
+new file mode 100644
+index 0000000..91e17ec
+--- /dev/null
++++ b/ga4-tracking.js
+@@ -0,0 +1,24 @@
++/**
++ * Google Analytics 4 tracking snippet.
++ *
++ * ⚠️ REPLACE THE PLACEHOLDER BELOW with your real GA4 Measurement ID
++ * (looks like "G-XXXXXXXXXX") once you've created a GA4 property for
++ * dson.site in https://analytics.google.com — see the admin dashboard's
++ * Analytics tab for the full setup guide.
++ *
++ * Until you do, this script is harmless but inert (no real ID to send data to).
++ */
++window.GA_MEASUREMENT_ID = 'G-XXXXXXXXXX';
++
++window.dataLayer = window.dataLayer || [];
++function gtag() { dataLayer.push(arguments); }
++gtag('js', new Date());
++gtag('config', window.GA_MEASUREMENT_ID);
++
++(function () {
++  if (window.GA_MEASUREMENT_ID === 'G-XXXXXXXXXX') return; // not configured yet
++  var s = document.createElement('script');
++  s.async = true;
++  s.src = 'https://www.googletagmanager.com/gtag/js?id=' + window.GA_MEASUREMENT_ID;
++  document.head.appendChild(s);
++})();
+diff --git a/index.html b/index.html
+index 382cf10..0b7c084 100644
+--- a/index.html
++++ b/index.html
+@@ -28,6 +28,7 @@
+   
+   <link href="https://unpkg.com/aos@2.3.1/dist/aos.css" rel="stylesheet">
+   <link rel="stylesheet" href="DSON.css">
++  <script src="ga4-tracking.js"></script>
+ </head>
+ <body>
+ 
+@@ -180,17 +181,6 @@
+           }
+       });
+   }
+-
+-  // Netlify Identity
+-  if (window.netlifyIdentity) {
+-    window.netlifyIdentity.on("init", user => {
+-      if (!user) {
+-        window.netlifyIdentity.on("login", () => {
+-          document.location.href = "/admin/";
+-        });
+-      }
+-    });
+-  }
+ </script>
+ 
+ </body>
+diff --git a/lib/auth.js b/lib/auth.js
+new file mode 100644
+index 0000000..cb1ae39
+--- /dev/null
++++ b/lib/auth.js
+@@ -0,0 +1,94 @@
++/**
++ * Lightweight session auth for the admin dashboard.
++ * Single-password login: a signed, expiring token is stored in an
++ * HttpOnly cookie. No database/user table needed since there's only
++ * one admin (DSON).
++ */
++const crypto = require('crypto');
++
++const COOKIE_NAME = 'dson_admin_session';
++const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
++
++function getSecret() {
++  const secret = process.env.SESSION_SECRET;
++  if (!secret) {
++    throw new Error('SESSION_SECRET environment variable is not configured.');
++  }
++  return secret;
++}
++
++function sign(expiry) {
++  return crypto.createHmac('sha256', getSecret()).update(String(expiry)).digest('hex');
++}
++
++function createSessionToken() {
++  const expiry = Date.now() + SESSION_TTL_MS;
++  return `${expiry}.${sign(expiry)}`;
++}
++
++function isSessionValid(token) {
++  if (!token || typeof token !== 'string' || !token.includes('.')) return false;
++  const [expiryStr, sig] = token.split('.');
++  const expiry = Number(expiryStr);
++  if (!expiry || Number.isNaN(expiry) || Date.now() > expiry) return false;
++
++  let expected;
++  try {
++    expected = sign(expiry);
++  } catch {
++    return false;
++  }
++
++  const a = Buffer.from(sig);
++  const b = Buffer.from(expected);
++  if (a.length !== b.length) return false;
++  return crypto.timingSafeEqual(a, b);
++}
++
++function setSessionCookie(res, token) {
++  const maxAge = Math.floor(SESSION_TTL_MS / 1000);
++  res.setHeader(
++    'Set-Cookie',
++    `${COOKIE_NAME}=${token}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${maxAge}`
++  );
++}
++
++function clearSessionCookie(res) {
++  res.setHeader(
++    'Set-Cookie',
++    `${COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`
++  );
++}
++
++function getTokenFromReq(req) {
++  if (req.cookies && req.cookies[COOKIE_NAME]) return req.cookies[COOKIE_NAME];
++  const header = req.headers && req.headers.cookie;
++  if (!header) return null;
++  const parts = header.split(';').map((s) => s.trim());
++  const match = parts.find((s) => s.startsWith(COOKIE_NAME + '='));
++  if (!match) return null;
++  return decodeURIComponent(match.slice(COOKIE_NAME.length + 1));
++}
++
++function isAuthenticated(req) {
++  return isSessionValid(getTokenFromReq(req));
++}
++
++function requireAuth(req, res) {
++  if (!isAuthenticated(req)) {
++    res.status(401).json({ error: 'Unauthorized' });
++    return false;
++  }
++  return true;
++}
++
++module.exports = {
++  COOKIE_NAME,
++  createSessionToken,
++  isSessionValid,
++  setSessionCookie,
++  clearSessionCookie,
++  getTokenFromReq,
++  isAuthenticated,
++  requireAuth,
++};
+diff --git a/lib/ga4.js b/lib/ga4.js
+new file mode 100644
+index 0000000..62038b6
+--- /dev/null
++++ b/lib/ga4.js
+@@ -0,0 +1,85 @@
++/**
++ * Minimal Google Analytics 4 Data API client using a service account,
++ * built with only Node's built-in `crypto` + `fetch` (no googleapis
++ * dependency). Requires 3 env vars to activate:
++ *   GA_PROPERTY_ID        - numeric GA4 property id
++ *   GA_CLIENT_EMAIL       - service account email
++ *   GA_PRIVATE_KEY        - service account private key (PEM, \n-escaped is fine)
++ */
++const crypto = require('crypto');
++
++function base64url(input) {
++  return Buffer.from(input)
++    .toString('base64')
++    .replace(/=/g, '')
++    .replace(/\+/g, '-')
++    .replace(/\//g, '_');
++}
++
++function isConfigured() {
++  return Boolean(
++    process.env.GA_PROPERTY_ID && process.env.GA_CLIENT_EMAIL && process.env.GA_PRIVATE_KEY
++  );
++}
++
++async function getAccessToken() {
++  const clientEmail = process.env.GA_CLIENT_EMAIL;
++  const privateKey = String(process.env.GA_PRIVATE_KEY).replace(/\\n/g, '\n');
++
++  const header = { alg: 'RS256', typ: 'JWT' };
++  const now = Math.floor(Date.now() / 1000);
++  const claims = {
++    iss: clientEmail,
++    scope: 'https://www.googleapis.com/auth/analytics.readonly',
++    aud: 'https://oauth2.googleapis.com/token',
++    exp: now + 3600,
++    iat: now,
++  };
++
++  const unsigned = `${base64url(JSON.stringify(header))}.${base64url(JSON.stringify(claims))}`;
++  const signer = crypto.createSign('RSA-SHA256');
++  signer.update(unsigned);
++  signer.end();
++  const signature = signer
++    .sign(privateKey)
++    .toString('base64')
++    .replace(/=/g, '')
++    .replace(/\+/g, '-')
++    .replace(/\//g, '_');
++  const assertion = `${unsigned}.${signature}`;
++
++  const resp = await fetch('https://oauth2.googleapis.com/token', {
++    method: 'POST',
++    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
++    body: new URLSearchParams({
++      grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
++      assertion,
++    }),
++  });
++
++  if (!resp.ok) {
++    throw new Error('Google token exchange failed: ' + (await resp.text()));
++  }
++  const json = await resp.json();
++  return json.access_token;
++}
++
++async function runReport(accessToken, propertyId, body) {
++  const resp = await fetch(
++    `https://analyticsdata.googleapis.com/v1beta/properties/${propertyId}:runReport`,
++    {
++      method: 'POST',
++      headers: {
++        Authorization: `Bearer ${accessToken}`,
++        'Content-Type': 'application/json',
++      },
++      body: JSON.stringify(body),
++    }
++  );
++  if (!resp.ok) {
++    throw new Error('GA4 runReport failed: ' + (await resp.text()));
++  }
++  return resp.json();
++}
++
++module.exports = { isConfigured, getAccessToken, runReport };
+diff --git a/lib/portfolio-store.js b/lib/portfolio-store.js
+new file mode 100644
+index 0000000..67bcefd
+--- /dev/null
++++ b/lib/portfolio-store.js
+@@ -0,0 +1,42 @@
++/**
++ * Reads/writes the portfolio works list.
++ * Source of truth once the admin dashboard is used: a JSON blob in
++ * Vercel Blob storage (so edits don't require a code deploy).
++ * Falls back to the bundled data/portfolio.json seed file if the
++ * blob hasn't been created yet or Blob storage is unreachable.
++ */
++const { put, list } = require('@vercel/blob');
++const seedData = require('../data/portfolio.json');
++
++const BLOB_PATH = 'data/portfolio-data.json';
++
++async function readPortfolio() {
++  try {
++    const token = process.env.BLOB_READ_WRITE_TOKEN;
++    const { blobs } = await list({ prefix: BLOB_PATH, token, limit: 10 });
++    const match = blobs.find((b) => b.pathname === BLOB_PATH);
++    if (match) {
++      const resp = await fetch(match.url, { cache: 'no-store' });
++      if (resp.ok) {
++        const json = await resp.json();
++        if (json && Array.isArray(json.works)) return json;
++      }
++    }
++  } catch (err) {
++    console.error('Blob read failed, falling back to bundled seed JSON:', err);
++  }
++  return seedData;
++}
++
++async function writePortfolio(data) {
++  const body = JSON.stringify(data, null, 2);
++  return put(BLOB_PATH, body, {
++    access: 'public',
++    contentType: 'application/json',
++    token: process.env.BLOB_READ_WRITE_TOKEN,
++    addRandomSuffix: false,
++    allowOverwrite: true,
++  });
++}
++
++module.exports = { readPortfolio, writePortfolio, BLOB_PATH };
+diff --git a/package-lock.json b/package-lock.json
+new file mode 100644
+index 0000000..e69bf83
+--- /dev/null
++++ b/package-lock.json
+@@ -0,0 +1,369 @@
++{
++  "name": "dson-site",
++  "version": "1.0.0",
++  "lockfileVersion": 3,
++  "requires": true,
++  "packages": {
++    "": {
++      "name": "dson-site",
++      "version": "1.0.0",
++      "dependencies": {
++        "@vercel/blob": "^2.8.0"
++      },
++      "engines": {
++        "node": ">=18"
++      }
++    },
++    "node_modules/@vercel/blob": {
++      "version": "2.8.0",
++      "resolved": "https://registry.npmjs.org/@vercel/blob/-/blob-2.8.0.tgz",
++      "integrity": "sha512-Nu+HWKpkgovCh/ezlG7wCVwF7RErTzLzZMbGKFBdGBCbTKyK+s5VXPLl+0+TpNEQPH8AVaGzOpIsXUOtkqylCQ==",
++      "license": "Apache-2.0",
++      "dependencies": {
++        "@vercel/oidc": "^3.6.1",
++        "async-retry": "^1.3.3",
++        "is-buffer": "^2.0.5",
++        "is-node-process": "^1.2.0",
++        "throttleit": "^2.1.0",
++        "undici": "^6.23.0"
++      },
++      "engines": {
++        "node": ">=20.0.0"
++      }
++    },
++    "node_modules/@vercel/cli-config": {
++      "version": "0.2.7",
++      "resolved": "https://registry.npmjs.org/@vercel/cli-config/-/cli-config-0.2.7.tgz",
++      "integrity": "sha512-KeSN2HBp8puZrj7kVjSEneDi9yBqW4nAD9AnhGhdYjGNpHl7IkXZVb3HnNe0WWc5+20RlUtmAGWNPQ8qP5QBhQ==",
++      "license": "Apache-2.0",
++      "dependencies": {
++        "xdg-app-paths": "5",
++        "zod": "4.1.11"
++      }
++    },
++    "node_modules/@vercel/cli-exec": {
++      "version": "1.0.1",
++      "resolved": "https://registry.npmjs.org/@vercel/cli-exec/-/cli-exec-1.0.1.tgz",
++      "integrity": "sha512-g9XerViJ/paZujufXYcu5XYI2vU2rtB4sgdpjUHde5RnOkdmpu0ngH46LCFGHoPXO/C+qDPSczIHIRN+8Q2YKQ==",
++      "license": "Apache-2.0",
++      "dependencies": {
++        "execa": "5.1.1"
++      },
++      "engines": {
++        "node": ">= 18"
++      }
++    },
++    "node_modules/@vercel/oidc": {
++      "version": "3.8.8",
++      "resolved": "https://registry.npmjs.org/@vercel/oidc/-/oidc-3.8.8.tgz",
++      "integrity": "sha512-aeq4/sgVh80zO6j2H+7FRfsG6NOXBrvzV1EEO8IdXPEJgwHIPakP+BFq3QmprsEQ18bIimds07kvaYhm2lehtg==",
++      "license": "Apache-2.0",
++      "dependencies": {
++        "@vercel/cli-config": "0.2.7",
++        "@vercel/cli-exec": "1.0.1",
++        "jose": "^5.9.6"
++      },
++      "engines": {
++        "node": ">= 20"
++      }
++    },
++    "node_modules/async-retry": {
++      "version": "1.3.3",
++      "resolved": "https://registry.npmjs.org/async-retry/-/async-retry-1.3.3.tgz",
++      "integrity": "sha512-wfr/jstw9xNi/0teMHrRW7dsz3Lt5ARhYNZ2ewpadnhaIp5mbALhOAP+EAdsC7t4Z6wqsDVv9+W6gm1Dk9mEyw==",
++      "license": "MIT",
++      "dependencies": {
++        "retry": "0.13.1"
++      }
++    },
++    "node_modules/cross-spawn": {
++      "version": "7.0.6",
++      "resolved": "https://registry.npmjs.org/cross-spawn/-/cross-spawn-7.0.6.tgz",
++      "integrity": "sha512-uV2QOWP2nWzsy2aMp8aRibhi9dlzF5Hgh5SHaB9OiTGEyDTiJJyx0uy51QXdyWbtAHNua4XJzUKca3OzKUd3vA==",
++      "license": "MIT",
++      "dependencies": {
++        "path-key": "^3.1.0",
++        "shebang-command": "^2.0.0",
++        "which": "^2.0.1"
++      },
++      "engines": {
++        "node": ">= 8"
++      }
++    },
++    "node_modules/execa": {
++      "version": "5.1.1",
++      "resolved": "https://registry.npmjs.org/execa/-/execa-5.1.1.tgz",
++      "integrity": "sha512-8uSpZZocAZRBAPIEINJj3Lo9HyGitllczc27Eh5YYojjMFMn8yHMDMaUHE2Jqfq05D/wucwI4JGURyXt1vchyg==",
++      "license": "MIT",
++      "dependencies": {
++        "cross-spawn": "^7.0.3",
++        "get-stream": "^6.0.0",
++        "human-signals": "^2.1.0",
++        "is-stream": "^2.0.0",
++        "merge-stream": "^2.0.0",
++        "npm-run-path": "^4.0.1",
++        "onetime": "^5.1.2",
++        "signal-exit": "^3.0.3",
++        "strip-final-newline": "^2.0.0"
++      },
++      "engines": {
++        "node": ">=10"
++      },
++      "funding": {
++        "url": "https://github.com/sindresorhus/execa?sponsor=1"
++      }
++    },
++    "node_modules/get-stream": {
++      "version": "6.0.1",
++      "resolved": "https://registry.npmjs.org/get-stream/-/get-stream-6.0.1.tgz",
++      "integrity": "sha512-ts6Wi+2j3jQjqi70w5AlN8DFnkSwC+MqmxEzdEALB2qXZYV3X/b1CTfgPLGJNMeAWxdPfU8FO1ms3NUfaHCPYg==",
++      "license": "MIT",
++      "engines": {
++        "node": ">=10"
++      },
++      "funding": {
++        "url": "https://github.com/sponsors/sindresorhus"
++      }
++    },
++    "node_modules/human-signals": {
++      "version": "2.1.0",
++      "resolved": "https://registry.npmjs.org/human-signals/-/human-signals-2.1.0.tgz",
++      "integrity": "sha512-B4FFZ6q/T2jhhksgkbEW3HBvWIfDW85snkQgawt07S7J5QXTk6BkNV+0yAeZrM5QpMAdYlocGoljn0sJ/WQkFw==",
++      "license": "Apache-2.0",
++      "engines": {
++        "node": ">=10.17.0"
++      }
++    },
++    "node_modules/is-buffer": {
++      "version": "2.0.5",
++      "resolved": "https://registry.npmjs.org/is-buffer/-/is-buffer-2.0.5.tgz",
++      "integrity": "sha512-i2R6zNFDwgEHJyQUtJEk0XFi1i0dPFn/oqjK3/vPCcDeJvW5NQ83V8QbicfF1SupOaB0h8ntgBC2YiE7dfyctQ==",
++      "funding": [
++        {
++          "type": "github",
++          "url": "https://github.com/sponsors/feross"
++        },
++        {
++          "type": "patreon",
++          "url": "https://www.patreon.com/feross"
++        },
++        {
++          "type": "consulting",
++          "url": "https://feross.org/support"
++        }
++      ],
++      "license": "MIT",
++      "engines": {
++        "node": ">=4"
++      }
++    },
++    "node_modules/is-node-process": {
++      "version": "1.2.0",
++      "resolved": "https://registry.npmjs.org/is-node-process/-/is-node-process-1.2.0.tgz",
++      "integrity": "sha512-Vg4o6/fqPxIjtxgUH5QLJhwZ7gW5diGCVlXpuUfELC62CuxM1iHcRe51f2W1FDy04Ai4KJkagKjx3XaqyfRKXw==",
++      "license": "MIT"
++    },
++    "node_modules/is-stream": {
++      "version": "2.0.1",
++      "resolved": "https://registry.npmjs.org/is-stream/-/is-stream-2.0.1.tgz",
++      "integrity": "sha512-hFoiJiTl63nn+kstHGBtewWSKnQLpyb155KHheA1l39uvtO9nWIop1p3udqPcUd/xbF1VLMO4n7OI6p7RbngDg==",
++      "license": "MIT",
++      "engines": {
++        "node": ">=8"
++      },
++      "funding": {
++        "url": "https://github.com/sponsors/sindresorhus"
++      }
++    },
++    "node_modules/isexe": {
++      "version": "2.0.0",
++      "resolved": "https://registry.npmjs.org/isexe/-/isexe-2.0.0.tgz",
++      "integrity": "sha512-RHxMLp9lnKHGHRng9QFhRCMbYAcVpn69smSGcq3f36xjgVVWThj4qqLbTLlq7Ssj8B+fIQ1EuCEGI2lKsyQeIw==",
++      "license": "ISC"
++    },
++    "node_modules/jose": {
++      "version": "5.10.0",
++      "resolved": "https://registry.npmjs.org/jose/-/jose-5.10.0.tgz",
++      "integrity": "sha512-s+3Al/p9g32Iq+oqXxkW//7jk2Vig6FF1CFqzVXoTUXt2qz89YWbL+OwS17NFYEvxC35n0FKeGO2LGYSxeM2Gg==",
++      "license": "MIT",
++      "funding": {
++        "url": "https://github.com/sponsors/panva"
++      }
++    },
++    "node_modules/merge-stream": {
++      "version": "2.0.0",
++      "resolved": "https://registry.npmjs.org/merge-stream/-/merge-stream-2.0.0.tgz",
++      "integrity": "sha512-abv/qOcuPfk3URPfDzmZU1LKmuw8kT+0nIHvKrKgFrwifol/doWcdA4ZqsWQ8ENrFKkd67Mfpo/LovbIUsbt3w==",
++      "license": "MIT"
++    },
++    "node_modules/mimic-fn": {
++      "version": "2.1.0",
++      "resolved": "https://registry.npmjs.org/mimic-fn/-/mimic-fn-2.1.0.tgz",
++      "integrity": "sha512-OqbOk5oEQeAZ8WXWydlu9HJjz9WVdEIvamMCcXmuqUYjTknH/sqsWvhQ3vgwKFRR1HpjvNBKQ37nbJgYzGqGcg==",
++      "license": "MIT",
++      "engines": {
++        "node": ">=6"
++      }
++    },
++    "node_modules/npm-run-path": {
++      "version": "4.0.1",
++      "resolved": "https://registry.npmjs.org/npm-run-path/-/npm-run-path-4.0.1.tgz",
++      "integrity": "sha512-S48WzZW777zhNIrn7gxOlISNAqi9ZC/uQFnRdbeIHhZhCA6UqpkOT8T1G7BvfdgP4Er8gF4sUbaS0i7QvIfCWw==",
++      "license": "MIT",
++      "dependencies": {
++        "path-key": "^3.0.0"
++      },
++      "engines": {
++        "node": ">=8"
++      }
++    },
++    "node_modules/onetime": {
++      "version": "5.1.2",
++      "resolved": "https://registry.npmjs.org/onetime/-/onetime-5.1.2.tgz",
++      "integrity": "sha512-kbpaSSGJTWdAY5KPVeMOKXSrPtr8C8C7wodJbcsd51jRnmD+GZu8Y0VoU6Dm5Z4vWr0Ig/1NKuWRKf7j5aaYSg==",
++      "license": "MIT",
++      "dependencies": {
++        "mimic-fn": "^2.1.0"
++      },
++      "engines": {
++        "node": ">=6"
++      },
++      "funding": {
++        "url": "https://github.com/sponsors/sindresorhus"
++      }
++    },
++    "node_modules/os-paths": {
++      "version": "4.4.0",
++      "resolved": "https://registry.npmjs.org/os-paths/-/os-paths-4.4.0.tgz",
++      "integrity": "sha512-wrAwOeXp1RRMFfQY8Sy7VaGVmPocaLwSFOYCGKSyo8qmJ+/yaafCl5BCA1IQZWqFSRBrKDYFeR9d/VyQzfH/jg==",
++      "license": "MIT",
++      "engines": {
++        "node": ">= 6.0"
++      }
++    },
++    "node_modules/path-key": {
++      "version": "3.1.1",
++      "resolved": "https://registry.npmjs.org/path-key/-/path-key-3.1.1.tgz",
++      "integrity": "sha512-ojmeN0qd+y0jszEtoY48r0Peq5dwMEkIlCOu6Q5f41lfkswXuKtYrhgoTpLnyIcHm24Uhqx+5Tqm2InSwLhE6Q==",
++      "license": "MIT",
++      "engines": {
++        "node": ">=8"
++      }
++    },
++    "node_modules/retry": {
++      "version": "0.13.1",
++      "resolved": "https://registry.npmjs.org/retry/-/retry-0.13.1.tgz",
++      "integrity": "sha512-XQBQ3I8W1Cge0Seh+6gjj03LbmRFWuoszgK9ooCpwYIrhhoO80pfq4cUkU5DkknwfOfFteRwlZ56PYOGYyFWdg==",
++      "license": "MIT",
++      "engines": {
++        "node": ">= 4"
++      }
++    },
++    "node_modules/shebang-command": {
++      "version": "2.0.0",
++      "resolved": "https://registry.npmjs.org/shebang-command/-/shebang-command-2.0.0.tgz",
++      "integrity": "sha512-kHxr2zZpYtdmrN1qDjrrX/Z1rR1kG8Dx+gkpK1G4eXmvXswmcE1hTWBWYUzlraYw1/yZp6YuDY77YtvbN0dmDA==",
++      "license": "MIT",
++      "dependencies": {
++        "shebang-regex": "^3.0.0"
++      },
++      "engines": {
++        "node": ">=8"
++      }
++    },
++    "node_modules/shebang-regex": {
++      "version": "3.0.0",
++      "resolved": "https://registry.npmjs.org/shebang-regex/-/shebang-regex-3.0.0.tgz",
++      "integrity": "sha512-7++dFhtcx3353uBaq8DDR4NuxBetBzC7ZQOhmTQInHEd6bSrXdiEyzCvG07Z44UYdLShWUyXt5M/yhz8ekcb1A==",
++      "license": "MIT",
++      "engines": {
++        "node": ">=8"
++      }
++    },
++    "node_modules/signal-exit": {
++      "version": "3.0.7",
++      "resolved": "https://registry.npmjs.org/signal-exit/-/signal-exit-3.0.7.tgz",
++      "integrity": "sha512-wnD2ZE+l+SPC/uoS0vXeE9L1+0wuaMqKlfz9AMUo38JsyLSBWSFcHR1Rri62LZc12vLr1gb3jl7iwQhgwpAbGQ==",
++      "license": "ISC"
++    },
++    "node_modules/strip-final-newline": {
++      "version": "2.0.0",
++      "resolved": "https://registry.npmjs.org/strip-final-newline/-/strip-final-newline-2.0.0.tgz",
++      "integrity": "sha512-BrpvfNAE3dcvq7ll3xVumzjKjZQ5tI1sEUIKr3Uoks0XUl45St3FlatVqef9prk4jRDzhW6WZg+3bk93y6pLjA==",
++      "license": "MIT",
++      "engines": {
++        "node": ">=6"
++      }
++    },
++    "node_modules/throttleit": {
++      "version": "2.1.0",
++      "resolved": "https://registry.npmjs.org/throttleit/-/throttleit-2.1.0.tgz",
++      "integrity": "sha512-nt6AMGKW1p/70DF/hGBdJB57B8Tspmbp5gfJ8ilhLnt7kkr2ye7hzD6NVG8GGErk2HWF34igrL2CXmNIkzKqKw==",
++      "license": "MIT",
++      "engines": {
++        "node": ">=18"
++      },
++      "funding": {
++        "url": "https://github.com/sponsors/sindresorhus"
++      }
++    },
++    "node_modules/undici": {
++      "version": "6.28.1",
++      "resolved": "https://registry.npmjs.org/undici/-/undici-6.28.1.tgz",
++      "integrity": "sha512-zWpdTVD54H48CIybL0rWQ3ukpb9d23wM7eH5RtfdmeP70cWHNjtfo7P4vZX+5CoDcO53J4Pu5uXp7lNfjc6DRA==",
++      "license": "MIT",
++      "engines": {
++        "node": ">=18.17"
++      }
++    },
++    "node_modules/which": {
++      "version": "2.0.2",
++      "resolved": "https://registry.npmjs.org/which/-/which-2.0.2.tgz",
++      "integrity": "sha512-BLI3Tl1TW3Pvl70l3yq3Y64i+awpwXqsGBYWkkqMtnbXgrMD+yj7rhW0kuEDxzJaYXGjEW5ogapKNMEKNMjibA==",
++      "license": "ISC",
++      "dependencies": {
++        "isexe": "^2.0.0"
++      },
++      "bin": {
++        "node-which": "bin/node-which"
++      },
++      "engines": {
++        "node": ">= 8"
++      }
++    },
++    "node_modules/xdg-app-paths": {
++      "version": "5.5.1",
++      "resolved": "https://registry.npmjs.org/xdg-app-paths/-/xdg-app-paths-5.5.1.tgz",
++      "integrity": "sha512-hI3flOB4PLZIy5prbtTpirobtPE2ZtZ52szO+2mM9Efp6ErM398La+C1lIpNWDfNoQk+6Lsi6nMcCwVB7pxeMQ==",
++      "license": "MIT",
++      "dependencies": {
++        "os-paths": "^4.0.1",
++        "xdg-portable": "^7.2.0"
++      },
++      "engines": {
++        "node": ">= 6.0"
++      }
++    },
++    "node_modules/xdg-portable": {
++      "version": "7.3.0",
++      "resolved": "https://registry.npmjs.org/xdg-portable/-/xdg-portable-7.3.0.tgz",
++      "integrity": "sha512-sqMMuL1rc0FmMBOzCpd0yuy9trqF2yTTVe+E9ogwCSWQCdDEtQUwrZPT6AxqtsFGRNxycgncbP/xmOOSPw5ZUw==",
++      "license": "MIT",
++      "dependencies": {
++        "os-paths": "^4.0.1"
++      },
++      "engines": {
++        "node": ">= 6.0"
++      }
++    },
++    "node_modules/zod": {
++      "version": "4.1.11",
++      "resolved": "https://registry.npmjs.org/zod/-/zod-4.1.11.tgz",
++      "integrity": "sha512-WPsqwxITS2tzx1bzhIKsEs19ABD5vmCVa4xBo2tq/SrV4RNZtfws1EnCWQXM6yh8bD08a1idvkB5MZSBiZsjwg==",
++      "license": "MIT",
++      "funding": {
++        "url": "https://github.com/sponsors/colinhacks"
++      }
++    }
++  }
++}
+diff --git a/package.json b/package.json
+new file mode 100644
+index 0000000..0475a69
+--- /dev/null
++++ b/package.json
+@@ -0,0 +1,12 @@
++{
++  "name": "dson-site",
++  "version": "1.0.0",
++  "private": true,
++  "description": "Chang Dick Shen (DSON) portfolio site — static frontend + Vercel serverless admin API.",
++  "engines": {
++    "node": ">=18"
++  },
++  "dependencies": {
++    "@vercel/blob": "^2.8.0"
++  }
++}
+diff --git a/portfolio.html b/portfolio.html
+index f25a118..e59825c 100644
+--- a/portfolio.html
++++ b/portfolio.html
+@@ -28,6 +28,7 @@
+   
+   <link href="https://unpkg.com/aos@2.3.1/dist/aos.css" rel="stylesheet">
+   <link rel="stylesheet" href="DSON.css">
++  <script src="ga4-tracking.js"></script>
+ </head>
+ <body>
+ 
+diff --git a/socialmedia.html b/socialmedia.html
+index 2f3333b..8031f14 100644
+--- a/socialmedia.html
++++ b/socialmedia.html
+@@ -28,6 +28,7 @@
+   
+   <link href="https://unpkg.com/aos@2.3.1/dist/aos.css" rel="stylesheet">
+   <link rel="stylesheet" href="DSON.css">
++  <script src="ga4-tracking.js"></script>
+ </head>
+ <body>
+ 
+-- 
+2.43.0
+
+
+From 9fcdd0d9ed3eb27f921a8e544717a2d6cecead82 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Mon, 21 Sep 2026 11:06:37 +0800
+Subject: [PATCH 2/2] Fix DSON.js line endings (avoid CRLF noise from prior
+ edit)
+
+The previous commit's DSON.js edit picked up CRLF line endings from
+the extracted working copy instead of the repo's LF convention,
+making the diff show as a full-file rewrite. Reapplied the same
+loadCMSData() change onto a clean LF base.
+---
+ DSON.js | 958 ++++++++++++++++++++++++++++----------------------------
+ 1 file changed, 479 insertions(+), 479 deletions(-)
+
+diff --git a/DSON.js b/DSON.js
+index 8ad64cb..2bd27a6 100644
+--- a/DSON.js
++++ b/DSON.js
+@@ -1,480 +1,480 @@
+-/**
+- * DSON Portfolio Core Script - ULTIMATE UNABRIDGED VERSION
+- * Features: 
+- * - Full CMS Integration (Decap/Netlify CMS)
+- * - Smart "All Work" Logic (1 Latest per Category)
+- * - Specific Category Pagination (Load More System)
+- * - Advanced Dynamic Modals (YouTube Embeds, Figma Prototypes, Image Sliders)
+- * - Image Lightbox System (Ghost-click Fixed)
+- * - Global Language Sync & Persistence (localStorage)
+- * - AOS (Animate On Scroll) Orchestration for Dynamic Content
+- * - Touch & Mouse Drag Swipe Support for Gallery
+- */
+-
+-// --- Global Variables ---
+-let modalData = {};           // Stores project details for modals
+-let allWorksData = [];        // Raw project list from CMS
+-let currentFilter = 'all';    // Active category filter
+-let currentLimit = 6;         // Items limit for specific categories
+-let currentGallery = [];      // Array for active modal's images
+-let currentGalleryIndex = 0;  // Index for active modal's slider
+-
+-// --- 1. System Initialization ---
+-document.addEventListener('DOMContentLoaded', () => {
+-    const langLinks = document.querySelectorAll('.lang-switcher a');
+-    
+-    // ✨ Memory: Load saved language preference
+-    const savedLang = localStorage.getItem('selectedLang');
+-    if (savedLang && langLinks.length > 0) {
+-        langLinks.forEach(link => {
+-            const isZhBtn = link.innerText.includes('中文');
+-            if ((savedLang === 'zh' && isZhBtn) || (savedLang === 'en' && !isZhBtn)) {
+-                link.classList.add('active');
+-            } else {
+-                link.classList.remove('active');
+-            }
+-        });
+-    }
+-
+-    // Sync static text on page immediately
+-    syncAllLanguage();
+-
+-    // Kickstart CMS data loading if on portfolio page
+-    if (document.getElementById('portfolio-grid')) {
+-        loadCMSData();
+-    }
+-
+-    // Language Switcher Global Listener
+-    langLinks.forEach(link => {
+-        link.addEventListener('click', (e) => {
+-            e.preventDefault();
+-            langLinks.forEach(l => l.classList.remove('active'));
+-            link.classList.add('active');
+-            
+-            const isChinese = link.innerText.includes('中文');
+-            localStorage.setItem('selectedLang', isChinese ? 'zh' : 'en');
+-            
+-            syncAllLanguage();
+-            
+-            // If a modal is open, we re-render it to refresh its language
+-            const overlay = document.getElementById('modal-overlay');
+-            if (overlay.classList.contains('open')) {
+-                const activeKey = overlay.getAttribute('data-current-key');
+-                if (activeKey) openModal(activeKey);
+-            }
+-        });
+-    });
+-});
+-
+-// --- 2. Data Engine & Rendering ---
+-
+-/**
+- * Fetch JSON data generated by CMS
+- */
+-async function loadCMSData() {
+-    const grid = document.getElementById('portfolio-grid');
+-    try {
+-        // Served by /api/portfolio (Vercel Blob-backed, editable from /admin).
+-        // Falls back to the bundled data/portfolio.json seed automatically
+-        // server-side if no admin edits have been saved yet.
+-        const response = await fetch('/api/portfolio');
+-        if (!response.ok) throw new Error('Portfolio data not found');
+-        
+-        const data = await response.json();
+-        if (data && data.works && data.works.length > 0) {
+-            console.log("CMS Data: Loaded successfully 🚀");
+-            allWorksData = data.works;
+-            renderPortfolioUI();
+-        }
+-    } catch (err) {
+-        console.warn("CMS Connection failed. Using placeholder or empty grid.", err);
+-        if(grid) grid.innerHTML = '';
+-    }
+-}
+-
+-/**
+- * Core Render Logic: Orchestrates Grid & Load More Button
+- */
+-function renderPortfolioUI() {
+-    const grid = document.getElementById('portfolio-grid');
+-    const loadMoreContainer = document.getElementById('load-more-container');
+-    if (!grid) return;
+-
+-    grid.innerHTML = ''; 
+-    modalData = {}; // Clear previous session data
+-
+-    const catLabels = {
+-        'uiux': { en: 'UI/UX', zh: 'UI/UX 设计' },
+-        'photo': { en: 'Photo Editing', zh: '照片后期' },
+-        'manipulation': { en: 'Image Manipulation', zh: '图像合成' },
+-        'video': { en: 'Video Editing', zh: '视频制作' },
+-        '3d': { en: '3D Modeling', zh: '3D 建模' },
+-        'graphic': { en: 'Graphic Design', zh: '平面设计' }
+-    };
+-
+-    let displayList = [];
+-
+-    if (currentFilter === 'all') {
+-        // ✨ SMART HOME LOGIC: Get exactly the latest 1 project from each of the 6 core categories
+-        const categories = ['video', 'uiux', 'manipulation', '3d', 'graphic', 'photo']; 
+-        categories.forEach(cat => {
+-            const latest = allWorksData.find(w => w.category === cat);
+-            if (latest) displayList.push(latest);
+-        });
+-        if (loadMoreContainer) loadMoreContainer.style.display = 'none';
+-    } else {
+-        // ✨ CATEGORY MODE: Filter by selected tag and apply current limit for pagination
+-        const filtered = allWorksData.filter(w => w.category === currentFilter);
+-        displayList = filtered.slice(0, currentLimit);
+-        
+-        if (loadMoreContainer) {
+-            loadMoreContainer.style.display = (filtered.length > currentLimit) ? 'block' : 'none';
+-        }
+-    }
+-
+-    // Build Grid Cards with Multilingual Metadata
+-    displayList.forEach((work, index) => {
+-        const uniqueKey = 'proj_' + index;
+-        const labels = catLabels[work.category] || { en: work.category, zh: work.category };
+-
+-        // Save to global modal storage
+-        modalData[uniqueKey] = { ...work, labels };
+-
+-        // Bento Grid Logic (Desktop)
+-        const bentoClass = (index % 4 === 0 || index % 4 === 3) ? 'bento-large' : '';
+-
+-        grid.innerHTML += `
+-            <div class="portfolio-item ${bentoClass}" onclick="openModal('${uniqueKey}')">
+-              <div class="portfolio-bg">
+-                <img src="${work.thumbnail}" alt="${work.title}" class="portfolio-img" onerror="this.src='Image/Logo_Colour.png'">
+-              </div>
+-              <div class="portfolio-overlay"></div>
+-              <div class="portfolio-info">
+-                <span class="lang-en">${labels.en}</span>
+-                <span class="lang-zh">${labels.zh}</span>
+-                <h3 class="lang-en">${work.title}</h3>
+-                <h3 class="lang-zh">${work.title_zh || work.title}</h3>
+-              </div>
+-            </div>
+-        `;
+-    });
+-
+-    syncAllLanguage(); 
+-    applyPortfolioAnimations(); 
+-}
+-
+-/**
+- * Handles category selection from the filter bar
+- */
+-function filterPortfolio(category, btnElement) {
+-    const buttons = document.querySelectorAll('.filter-btn');
+-    buttons.forEach(btn => btn.classList.remove('active'));
+-    if (btnElement) btnElement.classList.add('active');
+-
+-    currentFilter = category;
+-    currentLimit = 6; 
+-    renderPortfolioUI();
+-}
+-
+-/**
+- * Loads the next batch of projects in category view
+- */
+-function loadMoreItems() {
+-    currentLimit += 6; 
+-    renderPortfolioUI();
+-}
+-
+-// --- 3. Animation & Language Systems ---
+-
+-function applyPortfolioAnimations() {
+-    const items = document.querySelectorAll('.portfolio-item');
+-    if (items.length > 0) {
+-        items.forEach((card, index) => {
+-            card.removeAttribute('data-aos');
+-            card.classList.remove('aos-animate');
+-            void card.offsetWidth; 
+-
+-            const animationType = (index % 2 === 0) ? 'fade-right' : 'fade-left';
+-            card.setAttribute('data-aos', animationType);
+-            card.setAttribute('data-aos-delay', (index % 6) * 50); 
+-        });
+-
+-        AOS.init({
+-            duration: 1000,
+-            easing: 'ease-out-cubic',
+-            once: true,
+-            offset: 0 
+-        });
+-        
+-        AOS.refreshHard(); 
+-    }
+-}
+-
+-function syncAllLanguage() {
+-    const lang = localStorage.getItem('selectedLang') || 'en';
+-    const enNodes = document.querySelectorAll('.lang-en');
+-    const zhNodes = document.querySelectorAll('.lang-zh');
+-
+-    if (lang === 'zh') {
+-        enNodes.forEach(el => el.style.setProperty('display', 'none', 'important'));
+-        zhNodes.forEach(el => el.style.setProperty('display', 'block', 'important'));
+-    } else {
+-        enNodes.forEach(el => el.style.setProperty('display', 'block', 'important'));
+-        zhNodes.forEach(el => el.style.setProperty('display', 'none', 'important'));
+-    }
+-}
+-
+-// --- 4. Modal Engine (Full Features & Fixes) ---
+-
+-function openModal(key) {
+-    const d = modalData[key];
+-    if (!d) return;
+-
+-    const overlay = document.getElementById('modal-overlay');
+-    const mc = document.getElementById('modal-content');
+-    overlay.setAttribute('data-current-key', key); 
+-
+-    mc.style.maxWidth = '1100px';
+-    mc.style.width = '92%';
+-    mc.style.maxHeight = '92vh';
+-    mc.style.overflowY = 'auto';
+-    mc.style.padding = '3rem';
+-
+-    let mediaHTML = '';
+-    
+-    if (d.youtube_id) {
+-        mediaHTML = `
+-            <div style="width: 100%; display: flex; flex-direction: column; gap: 1rem; height:auto;">
+-                <iframe width="100%" height="100%" 
+-                        src="https://www.youtube.com/embed/${d.youtube_id}?rel=0&autoplay=0" 
+-                        title="DSON Project Video" frameborder="0" 
+-                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" 
+-                        allowfullscreen
+-                        style="border-radius:12px; box-shadow:0 10px 30px rgba(0,0,0,0.5); aspect-ratio: 16/9; background:#000;">
+-                </iframe>
+-                <a href="https://www.youtube.com/watch?v=${d.youtube_id}" target="_blank" 
+-                   style="display:flex; align-items:center; justify-content:center; gap:10px; padding:14px; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); border-radius:10px; color:#fff; text-decoration:none; font-size:0.85rem; transition:0.3s;">
+-                    <i class="bi bi-youtube" style="color:#ff0000; font-size:1.3rem;"></i>
+-                    <span class="lang-en">View on YouTube (Original Quality)</span>
+-                    <span class="lang-zh">前往 YouTube 观看 (原片画质)</span>
+-                </a>
+-            </div>`;
+-    } else if (d.figma_link) {
+-        mediaHTML = `
+-            <div style="width: 100%; height: 68vh; background:rgba(0,0,0,0.2); border-radius:12px; overflow:hidden; box-shadow:0 10px 30px rgba(0,0,0,0.5);">
+-                <iframe style="width:100%; height:100%; border:1px solid rgba(255,255,255,0.1);" 
+-                        src="https://www.figma.com/embed?embed_host=share&url=${encodeURIComponent(d.figma_link)}" 
+-                        allowfullscreen>
+-                </iframe>
+-            </div>`;
+-    } else if (d.gallery && d.gallery.length > 1) {
+-        currentGallery = d.gallery;
+-        currentGalleryIndex = 0;
+-        // HTML 中不再嵌入 onclick，全部由底部的事件监听器接管喵！
+-        mediaHTML = `
+-            <div style="position:relative; width:100%; display:flex; flex-direction:column; justify-content:center; align-items:center; height:auto;">
+-                <div style="position:relative; width:100%; display:flex; justify-content:center; align-items:center; user-select: none;">
+-                    <button class="gallery-nav-btn" onclick="changeGalleryImage(-1)" style="position:absolute; z-index:10; left:15px; background:rgba(0,0,0,0.6); color:white; border:1px solid rgba(255,255,255,0.2); border-radius:50%; width:45px; height:45px; cursor:pointer; font-size:1.2rem; backdrop-filter:blur(5px);"><i class="bi bi-chevron-left"></i></button>
+-                    <img id="modal-gallery-img" src="${currentGallery[0]}" 
+-                         class="portfolio-img" draggable="false"
+-                         style="cursor:zoom-in; transition:opacity 0.2s ease; user-select:none;">
+-                    <button class="gallery-nav-btn" onclick="changeGalleryImage(1)" style="position:absolute; z-index:10; right:15px; background:rgba(0,0,0,0.6); color:white; border:1px solid rgba(255,255,255,0.2); border-radius:50%; width:45px; height:45px; cursor:pointer; font-size:1.2rem; backdrop-filter:blur(5px);"><i class="bi bi-chevron-right"></i></button>
+-                </div>
+-                <div id="gallery-counter" class="gallery-page-counter">1 / ${currentGallery.length}</div>
+-            </div>`;
+-    } else {
+-        mediaHTML = `
+-            <img src="${d.thumbnail}" alt="${d.title}" 
+-                 class="portfolio-img"
+-                 style="cursor:zoom-in;"
+-                 onclick="openLightbox('${d.thumbnail}')">`;
+-    }
+-
+-    // ✨✨✨ FIX 1: d.title 完全替代 work.title，解决崩溃报错喵！
+-    mc.innerHTML = `
+-        <button class="modal-close" onclick="closeModal({target:document.getElementById('modal-overlay')})">
+-            <i class="bi bi-x-lg"></i>
+-        </button>
+-        <div style="display:flex; gap:3.5rem; flex-wrap:wrap; align-items:flex-start;">
+-            <div style="flex:1 1 500px; position:relative; display:flex; justify-content:center; align-items:center; height:auto;">
+-                ${mediaHTML}
+-            </div>
+-            <div style="flex:1 1 350px; display:flex; flex-direction:column; justify-content:center;">
+-                <div class="project-tag-container" style="font-size:0.75rem; letter-spacing:0.2em; text-transform:uppercase; color:var(--accent); margin-bottom:1rem;">
+-                    <span class="lang-en">${d.labels.en}</span>
+-                    <span class="lang-zh">${d.labels.zh}</span>
+-                </div>
+-                <h2 class="project-title-h2 lang-en" style="font-family:'Syne'; font-size:2.5rem; font-weight:800; margin-bottom:1.5rem; line-height:1.1;">${d.title}</h2>
+-                <h2 class="project-title-h2 lang-zh" style="font-family:'Syne'; font-size:2.5rem; font-weight:800; margin-bottom:1.5rem; line-height:1.1;">${d.title_zh || d.title}</h2>
+-                
+-                <p class="project-desc-p" style="color:var(--text-muted); line-height:1.9; margin-bottom:2rem; font-size:1rem;">
+-                    <span class="lang-en">${d.description || d.desc}</span>
+-                    <span class="lang-zh">${d.description_zh || d.desc_zh || d.desc}</span>
+-                </p>
+-                <div class="project-meta-details" style="display:flex; gap:3rem; border-top:1px solid rgba(255,255,255,0.1); padding-top:2rem; flex-wrap:wrap;">
+-                    <div>
+-                        <label style="display:block; font-size:0.7rem; color:var(--text-muted); margin-bottom:8px; text-transform:uppercase; letter-spacing:0.1em;">
+-                            <span class="lang-en">Tools</span><span class="lang-zh">使用工具</span>
+-                        </label>
+-                        <span style="font-family:'Inter'; font-weight:600; color:var(--white);">${d.tools}</span>
+-                    </div>
+-                    <div>
+-                        <label style="display:block; font-size:0.7rem; color:var(--text-muted); margin-bottom:8px; text-transform:uppercase; letter-spacing:0.1em;">
+-                            <span class="lang-en">Year</span><span class="lang-zh">创作年份</span>
+-                        </label>
+-                        <span style="font-family:'Inter'; font-weight:600; color:var(--white);">${d.year}</span>
+-                    </div>
+-                </div>
+-            </div>
+-        </div>
+-    `;
+-
+-    overlay.classList.add('open');
+-    syncAllLanguage(); 
+-
+-    // ✨✨✨ FIX 2: 精准识别“点击”与“滑动”，根治弹窗重叠 Bug喵！ ✨✨✨
+-    if (d.gallery && d.gallery.length > 1) {
+-        const galleryImg = document.getElementById('modal-gallery-img');
+-        if (galleryImg) {
+-            let startX = 0;
+-            let endX = 0;
+-
+-            // Mobile Touch Events
+-            galleryImg.addEventListener('touchstart', e => {
+-                startX = e.changedTouches[0].screenX;
+-            }, {passive: true});
+-
+-            galleryImg.addEventListener('touchend', e => {
+-                endX = e.changedTouches[0].screenX;
+-                handleSwipeAction();
+-            });
+-
+-            // Desktop Mouse Events
+-            galleryImg.addEventListener('mousedown', e => {
+-                startX = e.clientX;
+-                e.preventDefault(); // 阻止浏览器原生的图片拖拽黑影喵
+-            });
+-
+-            galleryImg.addEventListener('mouseup', e => {
+-                endX = e.clientX;
+-                handleSwipeAction();
+-            });
+-
+-            // 划动判定核心逻辑喵
+-            function handleSwipeAction() {
+-                if (startX - endX > 40) {
+-                    changeGalleryImage(1);  // 向左滑 -> 下一张
+-                } else if (endX - startX > 40) {
+-                    changeGalleryImage(-1); // 向右滑 -> 上一张
+-                }
+-            }
+-
+-            // 本地原生点击判定，绝不和触控冲突产生Ghost Click喵
+-            galleryImg.addEventListener('click', e => {
+-                // 如果刚刚发生了长距离滑动，则拒绝触发“点击放大”喵！
+-                if (Math.abs(startX - endX) > 10) {
+-                    return;
+-                }
+-                openLightbox(currentGallery[currentGalleryIndex]);
+-            });
+-        }
+-    }
+-}
+-
+-/**
+- * Gallery Navigation Logic
+- */
+-window.changeGalleryImage = function(direction) {
+-    if (currentGallery.length === 0) return;
+-    currentGalleryIndex = (currentGalleryIndex + direction + currentGallery.length) % currentGallery.length;
+-
+-    const imgEl = document.getElementById('modal-gallery-img');
+-    const counterEl = document.getElementById('gallery-counter');
+-
+-    if (imgEl && counterEl) {
+-        imgEl.style.opacity = '0';
+-        setTimeout(() => {
+-            imgEl.src = currentGallery[currentGalleryIndex];
+-            imgEl.style.opacity = '1';
+-            counterEl.innerText = `${currentGalleryIndex + 1} / ${currentGallery.length}`;
+-        }, 200); 
+-    }
+-};
+-
+-/**
+- * Modal Disposal Logic
+- */
+-function closeModal(e) {
+-    const overlay = document.getElementById('modal-overlay');
+-    if (e.target === overlay || e.target.closest('.modal-close')) {
+-        overlay.classList.remove('open');
+-        setTimeout(() => {
+-            const mc = document.getElementById('modal-content');
+-            if (mc) mc.innerHTML = '';
+-        }, 300);
+-    }
+-}
+-
+-// --- 5. Utility & Event Logic ---
+-
+-/**
+- * Fullscreen Image Lightbox Node (性能优化极致丝滑版 ✨)
+- */
+-function openLightbox(imgSrc) {
+-    let lightbox = document.getElementById('lightbox-overlay');
+-    if (!lightbox) {
+-        lightbox = document.createElement('div');
+-        lightbox.id = 'lightbox-overlay';
+-        
+-        // ✨ 优化1：移除极其消耗手机性能的 backdrop-filter，改用 98% 纯黑背景，并开启 opacity 硬件加速
+-        lightbox.style.cssText = 'position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(8,10,15,0.98); z-index:10000; display:flex; justify-content:center; align-items:center; cursor:zoom-out; opacity:0; transition:opacity 0.3s ease; display:none; will-change: opacity;';
+-        
+-        // ✨ 优化2：减小阴影渲染压力，开启 transform 硬件加速，确保动画 60fps 丝滑
+-        lightbox.innerHTML = `<img id="lightbox-img" src="" style="max-width:92vw; max-height:92vh; border-radius:6px; box-shadow:0 10px 25px rgba(0,0,0,0.5); transform:scale(0.95); transition:transform 0.3s cubic-bezier(0.165, 0.84, 0.44, 1); will-change: transform; object-fit: contain;">`;
+-        
+-        document.body.appendChild(lightbox);
+-        
+-        // 关闭逻辑
+-        lightbox.onclick = () => {
+-            lightbox.style.opacity = '0';
+-            document.getElementById('lightbox-img').style.transform = 'scale(0.95)';
+-            setTimeout(() => { lightbox.style.display = 'none'; }, 300);
+-        };
+-    }
+-    
+-    const img = document.getElementById('lightbox-img');
+-    img.src = imgSrc;
+-    lightbox.style.display = 'flex';
+-    
+-    // ✨ 优化3：使用底层强制回流 (Reflow) 替代玄学定时器，确保动画瞬间顺滑触发
+-    void lightbox.offsetWidth;
+-    
+-    lightbox.style.opacity = '1';
+-    img.style.transform = 'scale(1)';
+-}
+-
+-// Keyboard Navigation
+-document.addEventListener('keydown', e => {
+-    // Escape: Close Lightbox or Modal
+-    if (e.key === 'Escape') {
+-        const lb = document.getElementById('lightbox-overlay');
+-        if (lb && lb.style.display === 'flex') return lb.click();
+-        const mo = document.getElementById('modal-overlay');
+-        if (mo && mo.classList.contains('open')) closeModal({ target: mo });
+-    }
+-    // Arrows: Control Modal Gallery
+-    if (document.getElementById('modal-gallery-img')) {
+-        if (e.key === 'ArrowRight') changeGalleryImage(1);
+-        if (e.key === 'ArrowLeft') changeGalleryImage(-1);
+-    }
+-});
+-
+-// Scroll Events: Back to Top Trigger
+-document.addEventListener('scroll', () => {
+-    const btn = document.getElementById('backToTopBtn');
+-    if (btn) (window.scrollY > 500) ? btn.classList.add('show') : btn.classList.remove('show');
+-});
+-
+-window.scrollToTop = () => {
+-    window.scrollTo({ top: 0, behavior: 'smooth' });
++/**
++ * DSON Portfolio Core Script - ULTIMATE UNABRIDGED VERSION
++ * Features: 
++ * - Full CMS Integration (Decap/Netlify CMS)
++ * - Smart "All Work" Logic (1 Latest per Category)
++ * - Specific Category Pagination (Load More System)
++ * - Advanced Dynamic Modals (YouTube Embeds, Figma Prototypes, Image Sliders)
++ * - Image Lightbox System (Ghost-click Fixed)
++ * - Global Language Sync & Persistence (localStorage)
++ * - AOS (Animate On Scroll) Orchestration for Dynamic Content
++ * - Touch & Mouse Drag Swipe Support for Gallery
++ */
++
++// --- Global Variables ---
++let modalData = {};           // Stores project details for modals
++let allWorksData = [];        // Raw project list from CMS
++let currentFilter = 'all';    // Active category filter
++let currentLimit = 6;         // Items limit for specific categories
++let currentGallery = [];      // Array for active modal's images
++let currentGalleryIndex = 0;  // Index for active modal's slider
++
++// --- 1. System Initialization ---
++document.addEventListener('DOMContentLoaded', () => {
++    const langLinks = document.querySelectorAll('.lang-switcher a');
++    
++    // ✨ Memory: Load saved language preference
++    const savedLang = localStorage.getItem('selectedLang');
++    if (savedLang && langLinks.length > 0) {
++        langLinks.forEach(link => {
++            const isZhBtn = link.innerText.includes('中文');
++            if ((savedLang === 'zh' && isZhBtn) || (savedLang === 'en' && !isZhBtn)) {
++                link.classList.add('active');
++            } else {
++                link.classList.remove('active');
++            }
++        });
++    }
++
++    // Sync static text on page immediately
++    syncAllLanguage();
++
++    // Kickstart CMS data loading if on portfolio page
++    if (document.getElementById('portfolio-grid')) {
++        loadCMSData();
++    }
++
++    // Language Switcher Global Listener
++    langLinks.forEach(link => {
++        link.addEventListener('click', (e) => {
++            e.preventDefault();
++            langLinks.forEach(l => l.classList.remove('active'));
++            link.classList.add('active');
++            
++            const isChinese = link.innerText.includes('中文');
++            localStorage.setItem('selectedLang', isChinese ? 'zh' : 'en');
++            
++            syncAllLanguage();
++            
++            // If a modal is open, we re-render it to refresh its language
++            const overlay = document.getElementById('modal-overlay');
++            if (overlay.classList.contains('open')) {
++                const activeKey = overlay.getAttribute('data-current-key');
++                if (activeKey) openModal(activeKey);
++            }
++        });
++    });
++});
++
++// --- 2. Data Engine & Rendering ---
++
++/**
++ * Fetch JSON data generated by CMS
++ */
++async function loadCMSData() {
++    const grid = document.getElementById('portfolio-grid');
++    try {
++        // Served by /api/portfolio (Vercel Blob-backed, editable from /admin).
++        // Falls back to the bundled data/portfolio.json seed automatically
++        // server-side if no admin edits have been saved yet.
++        const response = await fetch('/api/portfolio');
++        if (!response.ok) throw new Error('Portfolio data not found');
++        
++        const data = await response.json();
++        if (data && data.works && data.works.length > 0) {
++            console.log("CMS Data: Loaded successfully 🚀");
++            allWorksData = data.works;
++            renderPortfolioUI();
++        }
++    } catch (err) {
++        console.warn("CMS Connection failed. Using placeholder or empty grid.", err);
++        if(grid) grid.innerHTML = '';
++    }
++}
++
++/**
++ * Core Render Logic: Orchestrates Grid & Load More Button
++ */
++function renderPortfolioUI() {
++    const grid = document.getElementById('portfolio-grid');
++    const loadMoreContainer = document.getElementById('load-more-container');
++    if (!grid) return;
++
++    grid.innerHTML = ''; 
++    modalData = {}; // Clear previous session data
++
++    const catLabels = {
++        'uiux': { en: 'UI/UX', zh: 'UI/UX 设计' },
++        'photo': { en: 'Photo Editing', zh: '照片后期' },
++        'manipulation': { en: 'Image Manipulation', zh: '图像合成' },
++        'video': { en: 'Video Editing', zh: '视频制作' },
++        '3d': { en: '3D Modeling', zh: '3D 建模' },
++        'graphic': { en: 'Graphic Design', zh: '平面设计' }
++    };
++
++    let displayList = [];
++
++    if (currentFilter === 'all') {
++        // ✨ SMART HOME LOGIC: Get exactly the latest 1 project from each of the 6 core categories
++        const categories = ['video', 'uiux', 'manipulation', '3d', 'graphic', 'photo']; 
++        categories.forEach(cat => {
++            const latest = allWorksData.find(w => w.category === cat);
++            if (latest) displayList.push(latest);
++        });
++        if (loadMoreContainer) loadMoreContainer.style.display = 'none';
++    } else {
++        // ✨ CATEGORY MODE: Filter by selected tag and apply current limit for pagination
++        const filtered = allWorksData.filter(w => w.category === currentFilter);
++        displayList = filtered.slice(0, currentLimit);
++        
++        if (loadMoreContainer) {
++            loadMoreContainer.style.display = (filtered.length > currentLimit) ? 'block' : 'none';
++        }
++    }
++
++    // Build Grid Cards with Multilingual Metadata
++    displayList.forEach((work, index) => {
++        const uniqueKey = 'proj_' + index;
++        const labels = catLabels[work.category] || { en: work.category, zh: work.category };
++
++        // Save to global modal storage
++        modalData[uniqueKey] = { ...work, labels };
++
++        // Bento Grid Logic (Desktop)
++        const bentoClass = (index % 4 === 0 || index % 4 === 3) ? 'bento-large' : '';
++
++        grid.innerHTML += `
++            <div class="portfolio-item ${bentoClass}" onclick="openModal('${uniqueKey}')">
++              <div class="portfolio-bg">
++                <img src="${work.thumbnail}" alt="${work.title}" class="portfolio-img" onerror="this.src='Image/Logo_Colour.png'">
++              </div>
++              <div class="portfolio-overlay"></div>
++              <div class="portfolio-info">
++                <span class="lang-en">${labels.en}</span>
++                <span class="lang-zh">${labels.zh}</span>
++                <h3 class="lang-en">${work.title}</h3>
++                <h3 class="lang-zh">${work.title_zh || work.title}</h3>
++              </div>
++            </div>
++        `;
++    });
++
++    syncAllLanguage(); 
++    applyPortfolioAnimations(); 
++}
++
++/**
++ * Handles category selection from the filter bar
++ */
++function filterPortfolio(category, btnElement) {
++    const buttons = document.querySelectorAll('.filter-btn');
++    buttons.forEach(btn => btn.classList.remove('active'));
++    if (btnElement) btnElement.classList.add('active');
++
++    currentFilter = category;
++    currentLimit = 6; 
++    renderPortfolioUI();
++}
++
++/**
++ * Loads the next batch of projects in category view
++ */
++function loadMoreItems() {
++    currentLimit += 6; 
++    renderPortfolioUI();
++}
++
++// --- 3. Animation & Language Systems ---
++
++function applyPortfolioAnimations() {
++    const items = document.querySelectorAll('.portfolio-item');
++    if (items.length > 0) {
++        items.forEach((card, index) => {
++            card.removeAttribute('data-aos');
++            card.classList.remove('aos-animate');
++            void card.offsetWidth; 
++
++            const animationType = (index % 2 === 0) ? 'fade-right' : 'fade-left';
++            card.setAttribute('data-aos', animationType);
++            card.setAttribute('data-aos-delay', (index % 6) * 50); 
++        });
++
++        AOS.init({
++            duration: 1000,
++            easing: 'ease-out-cubic',
++            once: true,
++            offset: 0 
++        });
++        
++        AOS.refreshHard(); 
++    }
++}
++
++function syncAllLanguage() {
++    const lang = localStorage.getItem('selectedLang') || 'en';
++    const enNodes = document.querySelectorAll('.lang-en');
++    const zhNodes = document.querySelectorAll('.lang-zh');
++
++    if (lang === 'zh') {
++        enNodes.forEach(el => el.style.setProperty('display', 'none', 'important'));
++        zhNodes.forEach(el => el.style.setProperty('display', 'block', 'important'));
++    } else {
++        enNodes.forEach(el => el.style.setProperty('display', 'block', 'important'));
++        zhNodes.forEach(el => el.style.setProperty('display', 'none', 'important'));
++    }
++}
++
++// --- 4. Modal Engine (Full Features & Fixes) ---
++
++function openModal(key) {
++    const d = modalData[key];
++    if (!d) return;
++
++    const overlay = document.getElementById('modal-overlay');
++    const mc = document.getElementById('modal-content');
++    overlay.setAttribute('data-current-key', key); 
++
++    mc.style.maxWidth = '1100px';
++    mc.style.width = '92%';
++    mc.style.maxHeight = '92vh';
++    mc.style.overflowY = 'auto';
++    mc.style.padding = '3rem';
++
++    let mediaHTML = '';
++    
++    if (d.youtube_id) {
++        mediaHTML = `
++            <div style="width: 100%; display: flex; flex-direction: column; gap: 1rem; height:auto;">
++                <iframe width="100%" height="100%" 
++                        src="https://www.youtube.com/embed/${d.youtube_id}?rel=0&autoplay=0" 
++                        title="DSON Project Video" frameborder="0" 
++                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" 
++                        allowfullscreen
++                        style="border-radius:12px; box-shadow:0 10px 30px rgba(0,0,0,0.5); aspect-ratio: 16/9; background:#000;">
++                </iframe>
++                <a href="https://www.youtube.com/watch?v=${d.youtube_id}" target="_blank" 
++                   style="display:flex; align-items:center; justify-content:center; gap:10px; padding:14px; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); border-radius:10px; color:#fff; text-decoration:none; font-size:0.85rem; transition:0.3s;">
++                    <i class="bi bi-youtube" style="color:#ff0000; font-size:1.3rem;"></i>
++                    <span class="lang-en">View on YouTube (Original Quality)</span>
++                    <span class="lang-zh">前往 YouTube 观看 (原片画质)</span>
++                </a>
++            </div>`;
++    } else if (d.figma_link) {
++        mediaHTML = `
++            <div style="width: 100%; height: 68vh; background:rgba(0,0,0,0.2); border-radius:12px; overflow:hidden; box-shadow:0 10px 30px rgba(0,0,0,0.5);">
++                <iframe style="width:100%; height:100%; border:1px solid rgba(255,255,255,0.1);" 
++                        src="https://www.figma.com/embed?embed_host=share&url=${encodeURIComponent(d.figma_link)}" 
++                        allowfullscreen>
++                </iframe>
++            </div>`;
++    } else if (d.gallery && d.gallery.length > 1) {
++        currentGallery = d.gallery;
++        currentGalleryIndex = 0;
++        // HTML 中不再嵌入 onclick，全部由底部的事件监听器接管喵！
++        mediaHTML = `
++            <div style="position:relative; width:100%; display:flex; flex-direction:column; justify-content:center; align-items:center; height:auto;">
++                <div style="position:relative; width:100%; display:flex; justify-content:center; align-items:center; user-select: none;">
++                    <button class="gallery-nav-btn" onclick="changeGalleryImage(-1)" style="position:absolute; z-index:10; left:15px; background:rgba(0,0,0,0.6); color:white; border:1px solid rgba(255,255,255,0.2); border-radius:50%; width:45px; height:45px; cursor:pointer; font-size:1.2rem; backdrop-filter:blur(5px);"><i class="bi bi-chevron-left"></i></button>
++                    <img id="modal-gallery-img" src="${currentGallery[0]}" 
++                         class="portfolio-img" draggable="false"
++                         style="cursor:zoom-in; transition:opacity 0.2s ease; user-select:none;">
++                    <button class="gallery-nav-btn" onclick="changeGalleryImage(1)" style="position:absolute; z-index:10; right:15px; background:rgba(0,0,0,0.6); color:white; border:1px solid rgba(255,255,255,0.2); border-radius:50%; width:45px; height:45px; cursor:pointer; font-size:1.2rem; backdrop-filter:blur(5px);"><i class="bi bi-chevron-right"></i></button>
++                </div>
++                <div id="gallery-counter" class="gallery-page-counter">1 / ${currentGallery.length}</div>
++            </div>`;
++    } else {
++        mediaHTML = `
++            <img src="${d.thumbnail}" alt="${d.title}" 
++                 class="portfolio-img"
++                 style="cursor:zoom-in;"
++                 onclick="openLightbox('${d.thumbnail}')">`;
++    }
++
++    // ✨✨✨ FIX 1: d.title 完全替代 work.title，解决崩溃报错喵！
++    mc.innerHTML = `
++        <button class="modal-close" onclick="closeModal({target:document.getElementById('modal-overlay')})">
++            <i class="bi bi-x-lg"></i>
++        </button>
++        <div style="display:flex; gap:3.5rem; flex-wrap:wrap; align-items:flex-start;">
++            <div style="flex:1 1 500px; position:relative; display:flex; justify-content:center; align-items:center; height:auto;">
++                ${mediaHTML}
++            </div>
++            <div style="flex:1 1 350px; display:flex; flex-direction:column; justify-content:center;">
++                <div class="project-tag-container" style="font-size:0.75rem; letter-spacing:0.2em; text-transform:uppercase; color:var(--accent); margin-bottom:1rem;">
++                    <span class="lang-en">${d.labels.en}</span>
++                    <span class="lang-zh">${d.labels.zh}</span>
++                </div>
++                <h2 class="project-title-h2 lang-en" style="font-family:'Syne'; font-size:2.5rem; font-weight:800; margin-bottom:1.5rem; line-height:1.1;">${d.title}</h2>
++                <h2 class="project-title-h2 lang-zh" style="font-family:'Syne'; font-size:2.5rem; font-weight:800; margin-bottom:1.5rem; line-height:1.1;">${d.title_zh || d.title}</h2>
++                
++                <p class="project-desc-p" style="color:var(--text-muted); line-height:1.9; margin-bottom:2rem; font-size:1rem;">
++                    <span class="lang-en">${d.description || d.desc}</span>
++                    <span class="lang-zh">${d.description_zh || d.desc_zh || d.desc}</span>
++                </p>
++                <div class="project-meta-details" style="display:flex; gap:3rem; border-top:1px solid rgba(255,255,255,0.1); padding-top:2rem; flex-wrap:wrap;">
++                    <div>
++                        <label style="display:block; font-size:0.7rem; color:var(--text-muted); margin-bottom:8px; text-transform:uppercase; letter-spacing:0.1em;">
++                            <span class="lang-en">Tools</span><span class="lang-zh">使用工具</span>
++                        </label>
++                        <span style="font-family:'Inter'; font-weight:600; color:var(--white);">${d.tools}</span>
++                    </div>
++                    <div>
++                        <label style="display:block; font-size:0.7rem; color:var(--text-muted); margin-bottom:8px; text-transform:uppercase; letter-spacing:0.1em;">
++                            <span class="lang-en">Year</span><span class="lang-zh">创作年份</span>
++                        </label>
++                        <span style="font-family:'Inter'; font-weight:600; color:var(--white);">${d.year}</span>
++                    </div>
++                </div>
++            </div>
++        </div>
++    `;
++
++    overlay.classList.add('open');
++    syncAllLanguage(); 
++
++    // ✨✨✨ FIX 2: 精准识别“点击”与“滑动”，根治弹窗重叠 Bug喵！ ✨✨✨
++    if (d.gallery && d.gallery.length > 1) {
++        const galleryImg = document.getElementById('modal-gallery-img');
++        if (galleryImg) {
++            let startX = 0;
++            let endX = 0;
++
++            // Mobile Touch Events
++            galleryImg.addEventListener('touchstart', e => {
++                startX = e.changedTouches[0].screenX;
++            }, {passive: true});
++
++            galleryImg.addEventListener('touchend', e => {
++                endX = e.changedTouches[0].screenX;
++                handleSwipeAction();
++            });
++
++            // Desktop Mouse Events
++            galleryImg.addEventListener('mousedown', e => {
++                startX = e.clientX;
++                e.preventDefault(); // 阻止浏览器原生的图片拖拽黑影喵
++            });
++
++            galleryImg.addEventListener('mouseup', e => {
++                endX = e.clientX;
++                handleSwipeAction();
++            });
++
++            // 划动判定核心逻辑喵
++            function handleSwipeAction() {
++                if (startX - endX > 40) {
++                    changeGalleryImage(1);  // 向左滑 -> 下一张
++                } else if (endX - startX > 40) {
++                    changeGalleryImage(-1); // 向右滑 -> 上一张
++                }
++            }
++
++            // 本地原生点击判定，绝不和触控冲突产生Ghost Click喵
++            galleryImg.addEventListener('click', e => {
++                // 如果刚刚发生了长距离滑动，则拒绝触发“点击放大”喵！
++                if (Math.abs(startX - endX) > 10) {
++                    return;
++                }
++                openLightbox(currentGallery[currentGalleryIndex]);
++            });
++        }
++    }
++}
++
++/**
++ * Gallery Navigation Logic
++ */
++window.changeGalleryImage = function(direction) {
++    if (currentGallery.length === 0) return;
++    currentGalleryIndex = (currentGalleryIndex + direction + currentGallery.length) % currentGallery.length;
++
++    const imgEl = document.getElementById('modal-gallery-img');
++    const counterEl = document.getElementById('gallery-counter');
++
++    if (imgEl && counterEl) {
++        imgEl.style.opacity = '0';
++        setTimeout(() => {
++            imgEl.src = currentGallery[currentGalleryIndex];
++            imgEl.style.opacity = '1';
++            counterEl.innerText = `${currentGalleryIndex + 1} / ${currentGallery.length}`;
++        }, 200); 
++    }
++};
++
++/**
++ * Modal Disposal Logic
++ */
++function closeModal(e) {
++    const overlay = document.getElementById('modal-overlay');
++    if (e.target === overlay || e.target.closest('.modal-close')) {
++        overlay.classList.remove('open');
++        setTimeout(() => {
++            const mc = document.getElementById('modal-content');
++            if (mc) mc.innerHTML = '';
++        }, 300);
++    }
++}
++
++// --- 5. Utility & Event Logic ---
++
++/**
++ * Fullscreen Image Lightbox Node (性能优化极致丝滑版 ✨)
++ */
++function openLightbox(imgSrc) {
++    let lightbox = document.getElementById('lightbox-overlay');
++    if (!lightbox) {
++        lightbox = document.createElement('div');
++        lightbox.id = 'lightbox-overlay';
++        
++        // ✨ 优化1：移除极其消耗手机性能的 backdrop-filter，改用 98% 纯黑背景，并开启 opacity 硬件加速
++        lightbox.style.cssText = 'position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(8,10,15,0.98); z-index:10000; display:flex; justify-content:center; align-items:center; cursor:zoom-out; opacity:0; transition:opacity 0.3s ease; display:none; will-change: opacity;';
++        
++        // ✨ 优化2：减小阴影渲染压力，开启 transform 硬件加速，确保动画 60fps 丝滑
++        lightbox.innerHTML = `<img id="lightbox-img" src="" style="max-width:92vw; max-height:92vh; border-radius:6px; box-shadow:0 10px 25px rgba(0,0,0,0.5); transform:scale(0.95); transition:transform 0.3s cubic-bezier(0.165, 0.84, 0.44, 1); will-change: transform; object-fit: contain;">`;
++        
++        document.body.appendChild(lightbox);
++        
++        // 关闭逻辑
++        lightbox.onclick = () => {
++            lightbox.style.opacity = '0';
++            document.getElementById('lightbox-img').style.transform = 'scale(0.95)';
++            setTimeout(() => { lightbox.style.display = 'none'; }, 300);
++        };
++    }
++    
++    const img = document.getElementById('lightbox-img');
++    img.src = imgSrc;
++    lightbox.style.display = 'flex';
++    
++    // ✨ 优化3：使用底层强制回流 (Reflow) 替代玄学定时器，确保动画瞬间顺滑触发
++    void lightbox.offsetWidth;
++    
++    lightbox.style.opacity = '1';
++    img.style.transform = 'scale(1)';
++}
++
++// Keyboard Navigation
++document.addEventListener('keydown', e => {
++    // Escape: Close Lightbox or Modal
++    if (e.key === 'Escape') {
++        const lb = document.getElementById('lightbox-overlay');
++        if (lb && lb.style.display === 'flex') return lb.click();
++        const mo = document.getElementById('modal-overlay');
++        if (mo && mo.classList.contains('open')) closeModal({ target: mo });
++    }
++    // Arrows: Control Modal Gallery
++    if (document.getElementById('modal-gallery-img')) {
++        if (e.key === 'ArrowRight') changeGalleryImage(1);
++        if (e.key === 'ArrowLeft') changeGalleryImage(-1);
++    }
++});
++
++// Scroll Events: Back to Top Trigger
++document.addEventListener('scroll', () => {
++    const btn = document.getElementById('backToTopBtn');
++    if (btn) (window.scrollY > 500) ? btn.classList.add('show') : btn.classList.remove('show');
++});
++
++window.scrollToTop = () => {
++    window.scrollTo({ top: 0, behavior: 'smooth' });
+ }
+\ No newline at end of file
+-- 
+2.43.0
+

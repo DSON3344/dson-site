@@ -1,0 +1,12 @@
+{
+  "name": "dson-site",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Chang Dick Shen (DSON) portfolio site — static frontend + Vercel serverless admin API.",
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "@vercel/blob": "^2.8.0"
+  }
+}

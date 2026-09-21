@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow">
+<title>Admin Login | DSON</title>
+<link rel="icon" type="image/png" href="../Image/DSON logo.png">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=Inter:wght@300;400;500;600&family=Noto+Sans+SC:wght@300;400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+<link rel="stylesheet" href="../DSON.css">
+<style>
+  body {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1.5rem;
+  }
+  .login-card {
+    width: 100%;
+    max-width: 380px;
+    background: rgba(255,255,255,0.02);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 2.5rem 2rem;
+    box-shadow: 0 20px 50px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.08);
+    text-align: center;
+  }
+  .login-card img { height: 40px; margin-bottom: 1.5rem; }
+  .login-card h1 {
+    font-family: 'Syne', sans-serif;
+    font-size: 1.4rem;
+    font-weight: 800;
+    margin-bottom: 0.4rem;
+  }
+  .login-card p.sub { color: var(--text-muted); font-size: 0.85rem; margin-bottom: 1.8rem; }
+  .field { text-align: left; margin-bottom: 1.2rem; }
+  .field label {
+    display: block;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--text-muted);
+    margin-bottom: 0.4rem;
+    font-weight: 600;
+  }
+  .field input {
+    width: 100%;
+    padding: 0.75rem 1rem;
+    background: rgba(10,10,10,0.5);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 10px;
+    color: #fff;
+    font-family: 'Inter', sans-serif;
+    font-size: 0.95rem;
+    outline: none;
+    transition: all 0.3s ease;
+  }
+  .field input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 4px rgba(0,210,255,0.15);
+  }
+  .login-btn {
+    width: 100%;
+    padding: 0.85rem;
+    background: linear-gradient(135deg, var(--accent) 0%, #0077b6 100%);
+    color: #000;
+    font-family: 'Syne', sans-serif;
+    font-weight: 800;
+    font-size: 0.9rem;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    border: none;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+  }
+  .login-btn:hover { transform: translateY(-2px); box-shadow: 0 10px 25px rgba(0,210,255,0.3); }
+  .login-btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+  .error-msg {
+    display: none;
+    color: #ff6b6b;
+    font-size: 0.82rem;
+    margin-top: 1rem;
+    padding: 0.7rem;
+    background: rgba(255,77,77,0.08);
+    border: 1px solid rgba(255,77,77,0.25);
+    border-radius: 8px;
+  }
+  .back-link {
+    display: inline-block;
+    margin-top: 1.6rem;
+    color: var(--text-muted);
+    font-size: 0.8rem;
+    text-decoration: none;
+  }
+  .back-link:hover { color: var(--accent); }
+</style>
+</head>
+<body>
+
+<div class="login-card">
+  <img src="../Image/Logo_Colour.png" alt="DSON logo">
+  <h1>Admin Dashboard</h1>
+  <p class="sub">Enter your admin password to continue</p>
+
+  <form id="loginForm">
+    <div class="field">
+      <label for="password">Password</label>
+      <input type="password" id="password" name="password" autocomplete="current-password" required autofocus>
+    </div>
+    <button type="submit" class="login-btn" id="loginBtn">Log In</button>
+    <div class="error-msg" id="errorMsg"></div>
+  </form>
+
+  <a href="../index.html" class="back-link"><i class="bi bi-arrow-left"></i> Back to site</a>
+</div>
+
+<script>
+  // If already logged in, skip straight to the dashboard.
+  fetch('/api/admin/me').then(r => r.json()).then(d => {
+    if (d.authenticated) window.location.href = 'index.html';
+  }).catch(() => {});
+
+  const form = document.getElementById('loginForm');
+  const btn = document.getElementById('loginBtn');
+  const errorMsg = document.getElementById('errorMsg');
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    errorMsg.style.display = 'none';
+    btn.disabled = true;
+    btn.textContent = 'Checking...';
+
+    try {
+      const password = document.getElementById('password').value;
+      const resp = await fetch('/api/admin/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password }),
+      });
+      const data = await resp.json();
+      if (resp.ok && data.ok) {
+        window.location.href = 'index.html';
+      } else {
+        errorMsg.textContent = data.error || 'Login failed. Please try again.';
+        errorMsg.style.display = 'block';
+      }
+    } catch (err) {
+      errorMsg.textContent = 'Network error. Please try again.';
+      errorMsg.style.display = 'block';
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Log In';
+    }
+  });
+</script>
+
+</body>
+</html>

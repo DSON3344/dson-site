@@ -1,2 +1,5 @@
 # Local Netlify folder
 .netlify
+
+# Node dependencies (installed by Vercel during build)
+node_modules
