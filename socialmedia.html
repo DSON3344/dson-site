@@ -29,6 +29,188 @@
   <link href="https://unpkg.com/aos@2.3.1/dist/aos.css" rel="stylesheet">
   <link rel="stylesheet" href="DSON.css">
   <script src="ga4-tracking.js"></script>
+
+  <!-- Social card carousel — page-scoped styles (only used on this page, so kept
+       out of the shared DSON.css). Reuses the site's own tokens (--black, --white,
+       --accent, --card-bg, --border, --text-muted) plus two font aliases so the
+       component styling below can stay readable. -->
+  <style>
+    :root{
+      --font-head:"Syne",sans-serif;
+      --font-body:"Inter",-apple-system,"PingFang SC","Microsoft YaHei","Noto Sans SC",sans-serif;
+    }
+
+    .stage{background:var(--black);border:1px solid var(--border);border-radius:18px;padding:46px 16px 34px;width:min(880px,100% - 8vw);margin:0 auto 4rem;overflow:hidden;}
+
+    /* ============ carousel shell ============ */
+    .carousel-wrap{display:flex;align-items:center;justify-content:center;gap:14px;}
+    .nav-btn{
+      width:44px;height:44px;border-radius:50%;flex:0 0 auto;cursor:pointer;
+      background:#16181B;border:1px solid #2A2D32;color:var(--white);
+      display:flex;align-items:center;justify-content:center;font-size:17px;
+      transition:border-color .15s ease,transform .15s ease,background .15s ease;
+    }
+    .nav-btn:hover{border-color:var(--accent);background:#1B1E22;}
+    .nav-btn:active{transform:scale(.92);}
+    .nav-btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px;}
+
+    .carousel-row{position:relative;display:flex;align-items:center;justify-content:center;min-height:360px;}
+    .slot{position:relative;}
+    .slot-side{margin:0 -24px;z-index:1;cursor:pointer;}
+    .slot-center{z-index:3;}
+    .card-fly{position:absolute;top:0;z-index:0;pointer-events:none;}
+
+    .counter{text-align:center;font-family:var(--font-body);font-weight:500;font-size:11px;color:var(--text-muted);letter-spacing:.04em;margin-top:18px;}
+
+    /* Motion-tilt toggle — phones/tablets only (no mouse). Lets the visitor swap
+       press-and-hold tilting for the device's own gyroscope/accelerometer. */
+    .gyro-toggle{
+      display:none;margin:14px auto 0;padding:7px 16px;border-radius:999px;
+      border:1px solid var(--border);background:#16181B;color:var(--text-muted);
+      font-family:var(--font-body);font-weight:600;font-size:10.5px;letter-spacing:.03em;
+      cursor:pointer;transition:border-color .15s ease,color .15s ease;
+    }
+    .gyro-toggle:active{transform:scale(.97);}
+    .gyro-toggle.on{color:var(--accent);border-color:var(--accent);}
+    @media (hover:none) and (pointer:coarse){
+      .gyro-toggle{display:block;}
+    }
+    .counter b{color:var(--white);}
+
+    /* ============ card ============ */
+    .card-persp{width:220px;}
+    .card-idle{position:relative;transition:transform .38s cubic-bezier(.22,1,.36,1),opacity .38s ease;perspective:1500px;will-change:transform,opacity;}
+    .slot-prev .card-idle{transform:scale(.74) rotate(-7deg);opacity:.48;}
+    .slot-next .card-idle{transform:scale(.74) rotate(7deg);opacity:.48;}
+    .slot-center .card-idle{transform:scale(1) rotate(0deg);opacity:1;}
+
+    .card-tilt{
+      position:relative;z-index:1;width:100%;height:322px;border-radius:16px;
+      transform-style:preserve-3d;transition:transform .55s cubic-bezier(.22,1,.36,1);
+      transform:rotateX(-3deg) rotateY(6deg);
+      touch-action:none;outline:none;
+    }
+    .slot-center .card-tilt{cursor:pointer;}
+    .card-tilt.tilting{transition:none;}
+    .card-tilt:focus-visible{box-shadow:0 0 0 3px var(--accent);border-radius:16px;}
+
+    /* Hover / press / gyro-tilt aura — reuses each card's own front gradient (so
+       a dark card gets a plain white glow and Instagram's glow is the same
+       multi-colour blend as its face). Lives INSIDE .card-inner (alongside the
+       front/back faces) rather than beside .card-tilt, so the 180deg flip
+       rotation carries the glow along with it instead of leaving it standing
+       still while the card turns. */
+    .aura{
+      position:absolute;z-index:0;inset:-8px;border-radius:20px;
+      filter:blur(12px);opacity:0;pointer-events:none;
+      transition:opacity .4s ease;
+    }
+    .card-tilt.tilting .aura{opacity:.6;}
+
+    .glare{
+      position:absolute;inset:0;border-radius:16px;pointer-events:none;z-index:6;
+      background:radial-gradient(circle at var(--gx,50%) var(--gy,20%), rgba(255,255,255,.5), transparent 55%);
+      opacity:0;transition:opacity .35s ease;
+    }
+    .card-tilt.tilting .glare{opacity:1;}
+
+    .card-inner{position:absolute;top:0;left:0;width:100%;height:100%;transform-style:preserve-3d;transition:transform .62s cubic-bezier(.2,.8,.2,1);}
+    .card-tilt.flipped .card-inner{transform:rotateY(180deg);}
+
+    /* ---- card body edges (gives the card physical thickness instead of a flat cutout) ---- */
+    .edge{position:absolute;pointer-events:none;}
+    .edge-r{left:100%;top:0;width:16px;height:100%;transform-origin:0% 50%;transform:rotateY(90deg);
+      border-radius:16px 0 0 16px;
+      background:linear-gradient(90deg,#484a52 0%,#202226 40%,#08090a 100%);}
+    .edge-l{right:100%;top:0;width:16px;height:100%;transform-origin:100% 50%;transform:rotateY(-90deg);
+      border-radius:0 16px 16px 0;
+      background:linear-gradient(90deg,#08090a 0%,#202226 60%,#6a6d78 100%);}
+    .edge-t{left:0;bottom:100%;width:100%;height:16px;transform-origin:50% 100%;transform:rotateX(90deg);
+      border-radius:0 0 16px 16px;
+      background:linear-gradient(180deg,#08090a 0%,#202226 60%,#6a6d78 100%);}
+    .edge-b{left:0;top:100%;width:100%;height:16px;transform-origin:50% 0%;transform:rotateX(-90deg);
+      border-radius:16px 16px 0 0;
+      background:linear-gradient(180deg,#484a52 0%,#202226 40%,#08090a 100%);}
+
+    .face{
+      position:absolute;top:0;left:0;width:100%;height:100%;border-radius:16px;backface-visibility:hidden;
+      overflow:hidden;clip-path:inset(0 round 16px);-webkit-mask-image:-webkit-radial-gradient(white,black);
+      display:flex;flex-direction:column;
+      box-shadow:0 20px 36px -16px rgba(0,0,0,.6), 0 2px 0 rgba(255,255,255,.07) inset;
+    }
+    .face.back{transform:rotateY(180deg) translateZ(16px);background:var(--card-bg);border:1px solid var(--border);padding:14px 15px 12px;}
+
+    /* ---- front decoration ---- */
+    .face.front{color:#fff;padding:15px;justify-content:center;align-items:center;gap:14px;text-align:center;position:relative;}
+    .front .glow{position:absolute;left:50%;top:40%;width:78%;aspect-ratio:1;transform:translate(-50%,-50%);
+      background:radial-gradient(circle, rgba(255,255,255,.30), transparent 68%);filter:blur(1px);pointer-events:none;}
+    .front .tech-pattern{
+      position:absolute;inset:0;pointer-events:none;opacity:.5;
+      background-image:
+        radial-gradient(circle, rgba(255,255,255,.20) 1px, transparent 1.6px),
+        repeating-linear-gradient(135deg, rgba(255,255,255,.10) 0 1px, transparent 1px 13px),
+        repeating-linear-gradient(0deg, rgba(255,255,255,.05) 0 1px, transparent 1px 4px);
+      background-size:16px 16px, auto, auto;
+    }
+    .front .holo{
+      position:absolute;inset:-25% -30%;pointer-events:none;opacity:.22;transform:rotate(9deg);
+      background:linear-gradient(115deg, transparent 28%, rgba(255,60,180,.4) 40%, rgba(255,235,80,.35) 47%, rgba(60,220,255,.4) 54%, transparent 68%);
+    }
+    .corner{position:absolute;width:22px;height:22px;border:1.5px solid rgba(255,255,255,.6);pointer-events:none;z-index:3;}
+    .corner.tl{top:4px;left:4px;border-right:none;border-bottom:none;border-radius:12px 0 0 0;}
+    .corner.tr{top:4px;right:4px;border-left:none;border-bottom:none;border-radius:0 12px 0 0;}
+    .corner.bl{bottom:4px;left:4px;border-right:none;border-top:none;border-radius:0 0 0 12px;}
+    .corner.br{bottom:4px;right:4px;border-left:none;border-top:none;border-radius:0 0 12px 0;}
+    .front .databar{display:flex;gap:2px;align-items:flex-end;justify-content:center;height:9px;width:64%;opacity:.55;position:relative;z-index:2;}
+    .front .databar i{flex:1;background:rgba(255,255,255,.75);display:block;border-radius:.5px;}
+    .front .settag{font-family:var(--font-body);font-weight:600;font-size:8.5px;letter-spacing:.06em;background:rgba(0,0,0,.3);padding:2px 7px;border-radius:999px;position:relative;z-index:3;}
+    .front .logo3d{position:relative;z-index:3;}
+    .front .logo3d.text{
+      font-family:var(--font-head);font-weight:800;font-size:40px;letter-spacing:0;
+      text-align:center;color:#fff;
+      text-shadow:0 1px 0 rgba(255,255,255,.55),0 2px 0 rgba(0,0,0,.18),0 3px 0 rgba(0,0,0,.18),0 4px 0 rgba(0,0,0,.18),0 7px 10px rgba(0,0,0,.5);
+    }
+    .front .logo3d.svg svg{
+      display:block;width:58px;height:58px;fill:#fff;
+      filter:drop-shadow(0 1px 0 rgba(255,255,255,.55)) drop-shadow(0 2px 0 rgba(0,0,0,.18)) drop-shadow(0 3px 0 rgba(0,0,0,.18)) drop-shadow(0 4px 0 rgba(0,0,0,.18)) drop-shadow(0 7px 10px rgba(0,0,0,.5));
+    }
+    .front .fname{font-family:var(--font-head);font-weight:700;font-size:14px;text-align:center;position:relative;z-index:3;text-shadow:0 1px 3px rgba(0,0,0,.5);}
+    .front .fhint{font-family:var(--font-body);font-weight:500;font-size:8px;letter-spacing:.03em;text-align:center;color:rgba(255,255,255,.8);position:relative;z-index:3;}
+
+    /* ---- back decoration ---- */
+    .face.back .backpattern{position:absolute;inset:0;pointer-events:none;opacity:.5;
+      background-image:radial-gradient(rgba(255,255,255,.045) 1px, transparent 1.5px);background-size:13px 13px;}
+    .back .corner{border-color:rgba(255,255,255,.12);}
+    .back-head{display:flex;justify-content:space-between;align-items:baseline;gap:6px;border-bottom:1px solid var(--border);padding-bottom:6px;margin-bottom:7px;position:relative;z-index:2;}
+    .back-head b{font-family:var(--font-head);font-weight:700;font-size:14px;color:var(--bk-accent,var(--accent));}
+    .back-head span{font-family:var(--font-body);font-weight:500;font-size:9px;color:var(--text-muted);}
+    .back-desc{font-family:var(--font-body);font-size:10px;line-height:1.5;color:#B7BAC0;margin:0 0 9px;position:relative;z-index:2;}
+    .back-stat{border:1px dashed #33373C;border-radius:8px;padding:7px 9px;margin-bottom:9px;position:relative;z-index:2;}
+    .back-stat-row{display:flex;justify-content:space-between;align-items:baseline;}
+    .back-stat-row + .back-stat-row{margin-top:5px;padding-top:5px;border-top:1px dashed #262A2F;}
+    .back-stat-label{font-family:var(--font-body);font-weight:600;font-size:8px;letter-spacing:.05em;color:var(--text-muted);text-transform:uppercase;}
+    .back-stat-num{font-family:var(--font-body);font-size:17px;font-weight:700;color:var(--white);font-variant-numeric:tabular-nums;}
+    .back-stat-note{font-family:var(--font-body);font-size:7.5px;color:#6C7075;margin-top:4px;}
+    .back-stat-empty .back-stat-note{margin-top:0;text-align:center;}
+    .back-wave{margin-bottom:auto;position:relative;z-index:2;}
+    .back-wave-label{font-family:var(--font-body);font-weight:500;font-size:7px;letter-spacing:.06em;color:#5B5F64;text-transform:uppercase;display:block;margin-bottom:4px;}
+    .back-wave-bars{display:flex;align-items:flex-end;gap:2.5px;height:32px;}
+    .back-wave-bars i{flex:1;background:var(--bk-accent,var(--accent));opacity:.55;border-radius:1px;display:block;}
+    .back-link{margin-top:9px;font-family:var(--font-body);font-weight:600;font-size:10px;color:var(--bk-accent,var(--accent));text-decoration:none;border:1px solid var(--bk-accent,var(--accent));border-radius:999px;padding:6px 10px;text-align:center;display:block;position:relative;z-index:2;}
+    .back-foot{display:flex;justify-content:space-between;font-family:var(--font-body);font-weight:500;font-size:8px;color:#5B5F64;margin-top:6px;position:relative;z-index:2;}
+
+    /* ============ mobile: side-peek cards get too tight below ~640px, so drop
+       to a single centered card + nav buttons instead of shrinking forever ============ */
+    @media (max-width:640px){
+      .slot-side{display:none;}
+      .card-persp{width:190px;}
+      .card-tilt{height:278px;}
+      .carousel-row{min-height:302px;}
+      .nav-btn{width:40px;height:40px;font-size:15px;}
+      .carousel-wrap{gap:10px;}
+      .stage{padding:32px 10px 26px;width:calc(100% - 8vw);margin:0 auto 3rem;}
+    }
+  </style>
 </head>
 <body>
 
@@ -65,126 +247,649 @@
     </p>
   </div>
 
-  <div class="social-platforms">
-    
-    <a href="https://www.behance.net/dickshen" target="_blank" class="platform-card" data-aos="fade-up" data-aos-delay="100">
-      <div class="platform-header">
-        <div class="platform-icon"><i class="bi bi-behance"></i></div>
-        <div>
-          <div class="platform-name">Behance</div>
-          <div class="platform-handle" style="color: var(--accent);">DSON</div>
-        </div>
+  <div class="stage">
+    <div class="carousel-wrap">
+      <button class="nav-btn" id="prev-btn" aria-label="Previous slide">‹</button>
+      <div class="carousel-row">
+        <div class="slot slot-side slot-prev" id="slot-prev"></div>
+        <div class="slot slot-center" id="slot-center"></div>
+        <div class="slot slot-side slot-next" id="slot-next"></div>
       </div>
-      <p style="font-size: 0.85rem; color: var(--text-muted);">
-        <span class="lang-en">In-depth design case studies, UI/UX projects, and professional visual portfolios.</span>
-        <span class="lang-zh">深度设计案例剖析、UI/UX 项目展示以及专业视觉作品集。</span>
-      </p>
-    </a>
-
-    <a href="https://github.com/DSON3344" target="_blank" class="platform-card" data-aos="fade-up" data-aos-delay="200">
-      <div class="platform-header">
-        <div class="platform-icon"><i class="bi bi-github"></i></div>
-        <div>
-          <div class="platform-name">GitHub</div>
-          <div class="platform-handle" style="color: var(--accent);">DSON3344</div>
-        </div>
-      </div>
-      <p style="font-size: 0.85rem; color: var(--text-muted);">
-        <span class="lang-en">Web development projects, front-end code, and technical experiments.</span>
-        <span class="lang-zh">网页开发项目、前端代码库展示以及硬核技术实验。</span>
-      </p>
-    </a>
-
-    <a href="https://www.youtube.com/@dson.0404" target="_blank" class="platform-card" data-aos="fade-up" data-aos-delay="300">
-      <div class="platform-header">
-        <div class="platform-icon"><i class="bi bi-youtube"></i></div>
-        <div>
-          <div class="platform-name">YouTube</div>
-          <div class="platform-handle" style="color: var(--accent);">@dson.0404</div>
-        </div>
-      </div>
-      <p style="font-size: 0.85rem; color: var(--text-muted);">
-        <span class="lang-en">Primary space for video edits, tutorials, and full-length creative content.</span>
-        <span class="lang-zh">发布视频剪辑、设计教程以及完整创意大作的主要平台。</span>
-      </p>
-    </a>
-
-    <a href="https://space.bilibili.com/318162425/" target="_blank" class="platform-card" data-aos="fade-up" data-aos-delay="400">
-      <div class="platform-header">
-        <div class="platform-icon">
-          <img src="https://cdn.simpleicons.org/bilibili/00d4ff" alt="Bilibili" style="width: 24px; height: 24px; display: block;">
-        </div>
-        <div>
-          <div class="platform-name">Bilibili</div>
-          <div class="platform-handle" style="color: var(--accent);">UID: 318162425</div>
-        </div>
-      </div>
-      <p style="font-size: 0.85rem; color: var(--text-muted);">
-        <span class="lang-en">Secondary video platform featuring localized gaming and design content.</span>
-        <span class="lang-zh">第二视频平台，主要分享本地化的游戏与设计相关内容。</span>
-      </p>
-    </a>
-
-    <a href="https://www.tiktok.com/@dson.04" target="_blank" class="platform-card" data-aos="fade-up" data-aos-delay="500">
-      <div class="platform-header">
-        <div class="platform-icon">
-          <img src="https://cdn.simpleicons.org/tiktok/00d4ff" alt="TikTok" style="width: 24px; height: 24px; display: block;">
-        </div>
-        <div>
-          <div class="platform-name">TikTok</div>
-          <div class="platform-handle" style="color: var(--accent);">@DSON_04</div>
-        </div>
-      </div>
-      <p style="font-size: 0.85rem; color: var(--text-muted);">
-        <span class="lang-en">Bite-sized creative tutorials, design trends, and quick editing showcases.</span>
-        <span class="lang-zh">分享短平快的创意教程、设计趋势以及高能剪辑展示。</span>
-      </p>
-    </a>
-
-    <a href="https://www.xiaohongshu.com/user/profile/5d60f1db00000000010029cf" target="_blank" class="platform-card" data-aos="fade-up" data-aos-delay="600">
-      <div class="platform-header">
-        <div class="platform-icon">
-          <img src="https://cdn.simpleicons.org/xiaohongshu/00d4ff" alt="Xiaohongshu" style="width: 24px; height: 24px; display: block;">
-        </div>
-        <div>
-          <div class="platform-name">小红书 (Rednote)</div>
-          <div class="platform-handle" style="color: var(--accent);">@DSON_04</div>
-        </div>
-      </div>
-      <p style="font-size: 0.85rem; color: var(--text-muted);">
-        <span class="lang-en">Detailed design insights, aesthetic lifestyle, and visual inspiration.</span>
-        <span class="lang-zh">深度设计干货分享、审美日常以及满满的视觉灵感记录。</span>
-      </p>
-    </a>
-
-    <a href="https://www.instagram.com/dson_04/" target="_blank" class="platform-card" data-aos="fade-up" data-aos-delay="700">
-      <div class="platform-header">
-        <div class="platform-icon"><i class="bi bi-instagram"></i></div>
-        <div>
-          <div class="platform-name">Instagram</div>
-          <div class="platform-handle" style="color: var(--accent);">@dson_04</div>
-        </div>
-      </div>
-      <p style="font-size: 0.85rem; color: var(--text-muted);">
-        <span class="lang-en">Behind-the-scenes, daily life, and quick visual design updates.</span>
-        <span class="lang-zh">分享幕后花絮、日常生活点滴以及最前沿的视觉设计动态。</span>
-      </p>
-    </a>
-
-    <a href="https://twitter.com/DSON_04" target="_blank" class="platform-card" data-aos="fade-up" data-aos-delay="800">
-      <div class="platform-header">
-        <div class="platform-icon"><i class="bi bi-twitter-x"></i></div>
-        <div>
-          <div class="platform-name">X (Twitter)</div>
-          <div class="platform-handle" style="color: var(--accent);">@DSON_04</div>
-        </div>
-      </div>
-      <p style="font-size: 0.85rem; color: var(--text-muted);">
-        <span class="lang-en">Networking, thoughts on tech, and community interactions.</span>
-        <span class="lang-zh">行业人脉拓展、分享科技见解以及日常的社区交流互动。</span>
-      </p>
-    </a>
+      <button class="nav-btn" id="next-btn" aria-label="Next slide">›</button>
+    </div>
+    <p class="counter" id="counter"></p>
   </div>
+
+  <script>
+  (function(){
+    function currentLang(){
+      try { return localStorage.getItem("selectedLang") || "en"; } catch(e){ return "en"; }
+    }
+    function platName(p){ return { en:p.name, zh:p.nameZh || p.name }; }
+    function spanPair(en, zh){
+      return '<span class="lang-en">'+en+'</span><span class="lang-zh">'+zh+'</span>';
+    }
+
+    var platforms = [
+      {name:"GitHub", handle:"DSON3344",
+       descEn:"Web development projects, front-end code, and technical experiments.",
+       descZh:"网页开发项目、前端代码库展示以及硬核技术实验。",
+       url:"https://github.com/DSON3344",
+       grad:"linear-gradient(155deg,#2A2E35 0%,#14161A 65%)", accent:"#8957E5", darkGlow:true,
+       svg:"M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12",
+       wave:[40,65,50,80,35,60,45,75,55,42],
+       stats:null},
+      {name:"LinkedIn", handle:"Dick Shen Chang",
+       descEn:"Professional milestones, career updates, and industry networking.",
+       descZh:"职业经历、里程碑分享，以及行业人脉拓展。",
+       url:"https://www.linkedin.com/in/dickshenchang",
+       grad:"linear-gradient(155deg,#1785D6 0%,#0A4C8F 70%)", accent:"#BFE0FF",
+       svg:"M416 32L31.9 32C14.3 32 0 46.5 0 64.3L0 447.7C0 465.5 14.3 480 31.9 480L416 480c17.6 0 32-14.5 32-32.3l0-383.4C448 46.5 433.6 32 416 32zM135.4 416l-66.4 0 0-213.8 66.5 0 0 213.8-.1 0zM102.2 96a38.5 38.5 0 1 1 0 77 38.5 38.5 0 1 1 0-77zM384.3 416l-66.4 0 0-104c0-24.8-.5-56.7-34.5-56.7-34.6 0-39.9 27-39.9 54.9l0 105.8-66.4 0 0-213.8 63.7 0 0 29.2 .9 0c8.9-16.8 30.6-34.5 62.9-34.5 67.2 0 79.7 44.3 79.7 101.9l0 117.2z",
+       viewBox:"0 0 448 512",
+       wave:[55,70,60,85,50,75,65,90,60,55],
+       stats:null},
+      {name:"YouTube", handle:"@dson.0404",
+       descEn:"Primary space for video edits, tutorials, and full-length creative content.",
+       descZh:"发布视频剪辑、设计教程以及完整创意大作的主要平台。",
+       url:"https://www.youtube.com/@dson.0404",
+       grad:"linear-gradient(155deg,#FF3B3B 0%,#A70000 70%)", accent:"#FFD1D1",
+       svg:"M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z",
+       wave:[60,80,70,95,65,85,75,100,70,62],
+       stats:[
+         {labelEn:"SUBSCRIBERS", labelZh:"订阅者", value:"1,026"},
+         {labelEn:"TOTAL VIEWS", labelZh:"总浏览量", value:"354,471"}
+       ], asOf:"19/05/2025"},
+      {name:"Bilibili", handle:"UID 318162425",
+       descEn:"Secondary video platform featuring localized gaming and design content.",
+       descZh:"第二视频平台，主要分享本地化的游戏与设计相关内容。",
+       url:"https://space.bilibili.com/318162425/",
+       grad:"linear-gradient(155deg,#FF8FB0 0%,#D14D77 70%)", accent:"#00C4EC",
+       svg:"M17.813 4.653h.854c1.51.054 2.769.578 3.773 1.574 1.004.995 1.524 2.249 1.56 3.76v7.36c-.036 1.51-.556 2.769-1.56 3.773s-2.262 1.524-3.773 1.56H5.333c-1.51-.036-2.769-.556-3.773-1.56S.036 18.858 0 17.347v-7.36c.036-1.511.556-2.765 1.56-3.76 1.004-.996 2.262-1.52 3.773-1.574h.774l-1.174-1.12a1.234 1.234 0 0 1-.373-.906c0-.356.124-.658.373-.907l.027-.027c.267-.249.573-.373.92-.373.347 0 .653.124.92.373L9.653 4.44c.071.071.134.142.187.213h4.267a.836.836 0 0 1 .16-.213l2.853-2.747c.267-.249.573-.373.92-.373.347 0 .662.151.929.4.267.249.391.551.391.907 0 .355-.124.657-.373.906zM5.333 7.24c-.746.018-1.373.276-1.88.773-.506.498-.769 1.13-.786 1.894v7.52c.017.764.28 1.395.786 1.893.507.498 1.134.756 1.88.773h13.334c.746-.017 1.373-.275 1.88-.773.506-.498.769-1.129.786-1.893v-7.52c-.017-.765-.28-1.396-.786-1.894-.507-.497-1.134-.755-1.88-.773zM8 11.107c.373 0 .684.124.933.373.25.249.383.569.4.96v1.173c-.017.391-.15.711-.4.96-.249.25-.56.374-.933.374s-.684-.125-.933-.374c-.25-.249-.383-.569-.4-.96V12.44c0-.373.129-.689.386-.947.258-.257.574-.386.947-.386zm8 0c.373 0 .684.124.933.373.25.249.383.569.4.96v1.173c-.017.391-.15.711-.4.96-.249.25-.56.374-.933.374s-.684-.125-.933-.374c-.25-.249-.383-.569-.4-.96V12.44c.017-.391.15-.711.4-.96.249-.249.56-.373.933-.373Z",
+       wave:[45,60,50,72,40,58,48,68,52,44],
+       stats:[
+         {labelEn:"SUBSCRIBERS", labelZh:"订阅者", value:"1,282"},
+         {labelEn:"TOTAL VIEWS", labelZh:"总浏览量", value:"639,722"}
+       ], asOf:"19/05/2025"},
+      {name:"TikTok", handle:"@DSON_04",
+       descEn:"Bite-sized creative tutorials, design trends, and quick editing showcases.",
+       descZh:"分享短平快的创意教程、设计趋势以及高能剪辑展示。",
+       url:"https://www.tiktok.com/@dson.04",
+       grad:"linear-gradient(155deg,#232323 0%,#050505 70%)", accent:"#25F4EE", darkGlow:true,
+       svg:"M12.525.02c1.31-.02 2.61-.01 3.91-.02.08 1.53.63 3.09 1.75 4.17 1.12 1.11 2.7 1.62 4.24 1.79v4.03c-1.44-.05-2.89-.35-4.2-.97-.57-.26-1.1-.59-1.62-.93-.01 2.92.01 5.84-.02 8.75-.08 1.4-.54 2.79-1.35 3.94-1.31 1.92-3.58 3.17-5.91 3.21-1.43.08-2.86-.31-4.08-1.03-2.02-1.19-3.44-3.37-3.65-5.71-.02-.5-.03-1-.01-1.49.18-1.9 1.12-3.72 2.58-4.96 1.66-1.44 3.98-2.13 6.15-1.72.02 1.48-.04 2.96-.04 4.44-.99-.32-2.15-.23-3.02.37-.63.41-1.11 1.04-1.36 1.75-.21.51-.15 1.07-.14 1.61.24 1.64 1.82 3.02 3.5 2.87 1.12-.01 2.19-.66 2.77-1.61.19-.33.4-.67.41-1.06.1-1.79.06-3.57.07-5.36.01-4.03-.01-8.05.02-12.07z",
+       wave:[70,90,80,100,75,95,85,100,78,70],
+       stats:[
+         {labelEn:"FOLLOWERS", labelZh:"粉丝", value:"14"},
+         {labelEn:"TOTAL VIEWS", labelZh:"总浏览量", value:"8,730"}
+       ], asOf:"19/05/2025"},
+      {name:"RedNote", nameZh:"小红书", handle:"@DSON_04",
+       descEn:"Detailed design insights, aesthetic lifestyle, and visual inspiration.",
+       descZh:"深度设计干货分享、审美日常以及满满的视觉灵感记录。",
+       url:"https://www.xiaohongshu.com/user/profile/5d60f1db00000000010029cf",
+       grad:"linear-gradient(155deg,#FF5468 0%,#C4102A 70%)", accent:"#FFE3B0",
+       svg:"M22.405 9.879c.002.016.01.02.07.019h.725a.797.797 0 0 0 .78-.972.794.794 0 0 0-.884-.618.795.795 0 0 0-.692.794c0 .101-.002.666.001.777zm-11.509 4.808c-.203.001-1.353.004-1.685.003a2.528 2.528 0 0 1-.766-.126.025.025 0 0 0-.03.014L7.7 16.127a.025.025 0 0 0 .01.032c.111.06.336.124.495.124.66.01 1.32.002 1.981 0 .01 0 .02-.006.023-.015l.712-1.545a.025.025 0 0 0-.024-.036zM.477 9.91c-.071 0-.076.002-.076.01a.834.834 0 0 0-.01.08c-.027.397-.038.495-.234 3.06-.012.24-.034.389-.135.607-.026.057-.033.042.003.112.046.092.681 1.523.787 1.74.008.015.011.02.017.02.008 0 .033-.026.047-.044.147-.187.268-.391.371-.606.306-.635.44-1.325.486-1.706.014-.11.021-.22.03-.33l.204-2.616.022-.293c.003-.029 0-.033-.03-.034zm7.203 3.757a1.427 1.427 0 0 1-.135-.607c-.004-.084-.031-.39-.235-3.06a.443.443 0 0 0-.01-.082c-.004-.011-.052-.008-.076-.008h-1.48c-.03.001-.034.005-.03.034l.021.293c.076.982.153 1.964.233 2.946.05.4.186 1.085.487 1.706.103.215.223.419.37.606.015.018.037.051.048.049.02-.003.742-1.642.804-1.765.036-.07.03-.055.003-.112zm3.861-.913h-.872a.126.126 0 0 1-.116-.178l1.178-2.625a.025.025 0 0 0-.023-.035l-1.318-.003a.148.148 0 0 1-.135-.21l.876-1.954a.025.025 0 0 0-.023-.035h-1.56c-.01 0-.02.006-.024.015l-.926 2.068c-.085.169-.314.634-.399.938a.534.534 0 0 0-.02.191.46.46 0 0 0 .23.378.981.981 0 0 0 .46.119h.59c.041 0-.688 1.482-.834 1.972a.53.53 0 0 0-.023.172.465.465 0 0 0 .23.398c.15.092.342.12.475.12l1.66-.001c.01 0 .02-.006.023-.015l.575-1.28a.025.025 0 0 0-.024-.035zm-6.93-4.937H3.1a.032.032 0 0 0-.034.033c0 1.048-.01 2.795-.01 6.829 0 .288-.269.262-.28.262h-.74c-.04.001-.044.004-.04.047.001.037.465 1.064.555 1.263.01.02.03.033.051.033.157.003.767.009.938-.014.153-.02.3-.06.438-.132.3-.156.49-.419.595-.765.052-.172.075-.353.075-.533.002-2.33 0-4.66-.007-6.991a.032.032 0 0 0-.032-.032zm11.784 6.896c0-.014-.01-.021-.024-.022h-1.465c-.048-.001-.049-.002-.05-.049v-4.66c0-.072-.005-.07.07-.07h.863c.08 0 .075.004.075-.074V8.393c0-.082.006-.076-.08-.076h-3.5c-.064 0-.075-.006-.075.073v1.445c0 .083-.006.077.08.077h.854c.075 0 .07-.004.07.07v4.624c0 .095.008.084-.085.084-.37 0-1.11-.002-1.304 0-.048.001-.06.03-.06.03l-.697 1.519s-.014.025-.008.036c.006.01.013.008.058.008 1.748.003 3.495.002 5.243.002.03-.001.034-.006.035-.033v-1.539zm4.177-3.43c0 .013-.007.023-.02.024-.346.006-.692.004-1.037.004-.014-.002-.022-.01-.022-.024-.005-.434-.007-.869-.01-1.303 0-.072-.006-.071.07-.07l.733-.003c.041 0 .081.002.12.015.093.025.16.107.165.204.006.431.002 1.153.001 1.153zm2.67.244a1.953 1.953 0 0 0-.883-.222h-.18c-.04-.001-.04-.003-.042-.04V10.21c0-.132-.007-.263-.025-.394a1.823 1.823 0 0 0-.153-.53 1.533 1.533 0 0 0-.677-.71 2.167 2.167 0 0 0-1-.258c-.153-.003-.567 0-.72 0-.07 0-.068.004-.068-.065V7.76c0-.031-.01-.041-.046-.039H17.93s-.016 0-.023.007c-.006.006-.008.012-.008.023v.546c-.008.036-.057.015-.082.022h-.95c-.022.002-.028.008-.03.032v1.481c0 .09-.004.082.082.082h.913c.082 0 .072.128.072.128V11.19s.003.117-.06.117h-1.482c-.068 0-.06.082-.06.082v1.445s-.01.068.064.068h1.457c.082 0 .076-.006.076.079v3.225c0 .088-.007.081.082.081h1.43c.09 0 .082.007.082-.08v-3.27c0-.029.006-.035.033-.035l2.323-.003c.098 0 .191.02.28.061a.46.46 0 0 1 .274.407c.008.395.003.79.003 1.185 0 .259-.107.367-.33.367h-1.218c-.023.002-.029.008-.028.033.184.437.374.871.57 1.303a.045.045 0 0 0 .04.026c.17.005.34.002.51.003.15-.002.517.004.666-.01a2.03 2.03 0 0 0 .408-.075c.59-.18.975-.698.976-1.313v-1.981c0-.128-.01-.254-.034-.38 0 .078-.029-.641-.724-.998z",
+       wave:[35,55,42,65,32,50,40,60,45,38],
+       stats:[
+         {labelEn:"SUBSCRIBERS", labelZh:"订阅者", value:"10"},
+         {labelEn:"TOTAL VIEWS", labelZh:"总浏览量", value:"47,551"}
+       ], asOf:"19/05/2025"},
+      {name:"Instagram", handle:"@dson_04",
+       descEn:"Behind-the-scenes, daily life, and quick visual design updates.",
+       descZh:"分享幕后花絮、日常生活点滴以及最前沿的视觉设计动态。",
+       url:"https://www.instagram.com/dson_04/",
+       grad:"linear-gradient(135deg,#4F5BD5 0%,#962FBF 30%,#D62976 55%,#FA7E1E 78%,#FEDA75 100%)", accent:"#FFFFFF",
+       svg:"M7.0301.084c-1.2768.0602-2.1487.264-2.911.5634-.7888.3075-1.4575.72-2.1228 1.3877-.6652.6677-1.075 1.3368-1.3802 2.127-.2954.7638-.4956 1.6365-.552 2.914-.0564 1.2775-.0689 1.6882-.0626 4.947.0062 3.2586.0206 3.6671.0825 4.9473.061 1.2765.264 2.1482.5635 2.9107.308.7889.72 1.4573 1.388 2.1228.6679.6655 1.3365 1.0743 2.1285 1.38.7632.295 1.6361.4961 2.9134.552 1.2773.056 1.6884.069 4.9462.0627 3.2578-.0062 3.668-.0207 4.9478-.0814 1.28-.0607 2.147-.2652 2.9098-.5633.7889-.3086 1.4578-.72 2.1228-1.3881.665-.6682 1.0745-1.3378 1.3795-2.1284.2957-.7632.4966-1.636.552-2.9124.056-1.2809.0692-1.6898.063-4.948-.0063-3.2583-.021-3.6668-.0817-4.9465-.0607-1.2797-.264-2.1487-.5633-2.9117-.3084-.7889-.72-1.4568-1.3876-2.1228C21.2982 1.33 20.628.9208 19.8378.6165 19.074.321 18.2017.1197 16.9244.0645 15.6471.0093 15.236-.005 11.977.0014 8.718.0076 8.31.0215 7.0301.0839m.1402 21.6932c-1.17-.0509-1.8053-.2453-2.2287-.408-.5606-.216-.96-.4771-1.3819-.895-.422-.4178-.6811-.8186-.9-1.378-.1644-.4234-.3624-1.058-.4171-2.228-.0595-1.2645-.072-1.6442-.079-4.848-.007-3.2037.0053-3.583.0607-4.848.05-1.169.2456-1.805.408-2.2282.216-.5613.4762-.96.895-1.3816.4188-.4217.8184-.6814 1.3783-.9003.423-.1651 1.0575-.3614 2.227-.4171 1.2655-.06 1.6447-.072 4.848-.079 3.2033-.007 3.5835.005 4.8495.0608 1.169.0508 1.8053.2445 2.228.408.5608.216.96.4754 1.3816.895.4217.4194.6816.8176.9005 1.3787.1653.4217.3617 1.056.4169 2.2263.0602 1.2655.0739 1.645.0796 4.848.0058 3.203-.0055 3.5834-.061 4.848-.051 1.17-.245 1.8055-.408 2.2294-.216.5604-.4763.96-.8954 1.3814-.419.4215-.8181.6811-1.3783.9-.4224.1649-1.0577.3617-2.2262.4174-1.2656.0595-1.6448.072-4.8493.079-3.2045.007-3.5825-.006-4.848-.0608M16.953 5.5864A1.44 1.44 0 1 0 18.39 4.144a1.44 1.44 0 0 0-1.437 1.4424M5.8385 12.012c.0067 3.4032 2.7706 6.1557 6.173 6.1493 3.4026-.0065 6.157-2.7701 6.1506-6.1733-.0065-3.4032-2.771-6.1565-6.174-6.1498-3.403.0067-6.156 2.771-6.1496 6.1738M8 12.0077a4 4 0 1 1 4.008 3.9921A3.9996 3.9996 0 0 1 8 12.0077",
+       wave:[50,72,58,88,48,70,60,92,55,50],
+       stats:[
+         {labelEn:"FOLLOWERS", labelZh:"粉丝", value:"40"},
+         {labelEn:"TOTAL VIEWS", labelZh:"总浏览量", value:"6,709"}
+       ], asOf:"19/05/2025"},
+      {name:"X (Twitter)", handle:"@DSON_04",
+       descEn:"Networking, thoughts on tech, and community interactions.",
+       descZh:"行业人脉拓展、分享科技见解以及日常的社区交流互动。",
+       url:"https://twitter.com/DSON_04",
+       grad:"linear-gradient(155deg,#2E2E2E 0%,#050505 70%)", accent:"#FFFFFF", darkGlow:true,
+       svg:"M14.234 10.162 22.977 0h-2.072l-7.591 8.824L7.251 0H.258l9.168 13.343L.258 24H2.33l8.016-9.318L16.749 24h6.993zm-2.837 3.299-.929-1.329L3.076 1.56h3.182l5.965 8.532.929 1.329 7.754 11.09h-3.182z",
+       wave:[30,45,36,55,28,42,34,50,38,32],
+       stats:[
+         {labelEn:"FOLLOWERS", labelZh:"粉丝", value:"102"},
+         {labelEn:"TOTAL VIEWS", labelZh:"总浏览量", value:"93,468"}
+       ], asOf:"19/05/2025"}
+    ];
+
+    var n = platforms.length;
+    var current = 0;
+
+    function statBlockHTML(p){
+      if (!p.stats || !p.stats.length){
+        return '<div class="back-stat back-stat-empty"><div class="back-stat-note">' +
+          spanPair(
+            "Live stats coming soon — API not yet connected",
+            "实时数据统计筹备中，尚未接入 API"
+          ) + '</div></div>';
+      }
+      var rows = p.stats.map(function(s){
+        return '<div class="back-stat-row"><span class="back-stat-label">' +
+          spanPair(s.labelEn, s.labelZh) +
+          '</span><span class="back-stat-num">' + s.value + '</span></div>';
+      }).join("");
+      var note = p.live
+        ? spanPair("● Live · fetched just now", "● 实时数据 · 刚刚获取")
+        : spanPair(
+            "As of " + p.asOf + " · updated by hand, live API pending",
+            "数据截至 " + p.asOf + " · 人工更新，尚未接入实时 API"
+          );
+      return '<div class="back-stat">' + rows + '<div class="back-stat-note">' + note + '</div></div>';
+    }
+
+    function buildFront(p, idx){
+      var front = document.createElement("div");
+      front.className = "face front";
+      front.style.background = p.grad;
+      var logoHTML = p.svg
+        ? '<div class="logo3d svg"><svg viewBox="'+(p.viewBox||"0 0 24 24")+'" aria-hidden="true"><path d="'+p.svg+'"/></svg></div>'
+        : '<div class="logo3d text">'+p.name+'</div>';
+      var nm = platName(p);
+      front.innerHTML =
+        '<div class="glow"></div>' +
+        '<div class="holo"></div>' +
+        '<div class="tech-pattern"></div>' +
+        '<span class="corner tl"></span><span class="corner tr"></span><span class="corner bl"></span><span class="corner br"></span>' +
+        '<span class="settag">SOCIAL · 0'+(idx+1)+'</span>' +
+        logoHTML +
+        '<div class="databar">'+p.wave.slice(0,14).map(function(v){return '<i style="height:'+Math.max(20,v)+'%"></i>';}).join("")+'</div>' +
+        '<div><div class="fname">'+spanPair(nm.en, nm.zh)+'</div><div class="fhint">'+spanPair("↻ Tap to flip","↻ 点击翻面")+'</div></div>';
+      return front;
+    }
+
+    function buildBack(p, idx){
+      var back = document.createElement("div");
+      back.className = "face back";
+      back.style.setProperty("--bk-accent", p.accent);
+      var bars = p.wave.map(function(v){return '<i style="height:'+v+'%"></i>';}).join("");
+      var nm = platName(p);
+      back.innerHTML =
+        '<div class="backpattern"></div>' +
+        '<span class="corner tl"></span><span class="corner br"></span>' +
+        '<div class="back-head"><b>'+spanPair(nm.en, nm.zh)+'</b><span>'+p.handle+'</span></div>' +
+        '<p class="back-desc">'+spanPair(p.descEn, p.descZh)+'</p>' +
+        statBlockHTML(p) +
+        '<div class="back-wave"><span class="back-wave-label">'+spanPair("Signal preview (demo)","信号预览（示意）")+'</span><div class="back-wave-bars">'+bars+'</div></div>' +
+        '<a class="back-link" href="'+p.url+'" target="_blank" rel="noopener">'+spanPair("Visit platform →","前往平台 →")+'</a>' +
+        '<div class="back-foot"><span>DSON · SOCIAL</span><span>0'+(idx+1)+' / 0'+n+'</span></div>';
+      return back;
+    }
+
+    function roleLabel(role, p, lang){
+      var nm = platName(p)[lang === "zh" ? "zh" : "en"];
+      if (lang === "zh"){
+        return role === "center" ? (nm + " 卡片，点击查看详情") : ("切换到 " + nm);
+      }
+      return role === "center" ? (nm + " card — tap to view details") : ("Switch to " + nm);
+    }
+
+    var IDLE_POSE = {
+      prev:   {transform:"scale(.74) rotate(-7deg)", opacity:".48"},
+      center: {transform:"scale(1) rotate(0deg)",     opacity:"1"},
+      next:   {transform:"scale(.74) rotate(7deg)",   opacity:".48"}
+    };
+    // Explicitly animates the .card-idle scale/opacity between two known poses
+    // (rather than just re-parenting and hoping the CSS transition catches the
+    // change) so the "selected card grows, the other shrinks" swap always plays.
+    function animateSwap(persp, fromRole, toRole){
+      var idle = persp.querySelector(".card-idle");
+      var from = IDLE_POSE[fromRole], to = IDLE_POSE[toRole];
+      idle.style.transition = "none";
+      idle.style.transform = from.transform;
+      idle.style.opacity = from.opacity;
+      idle.getBoundingClientRect(); // force reflow so the line above isn't coalesced away
+      idle.style.transition = "transform .42s cubic-bezier(.22,1,.36,1), opacity .42s ease";
+      idle.style.transform = to.transform;
+      idle.style.opacity = to.opacity;
+    }
+
+    // ---- position-only "conveyor" sliding, layered on top of animateSwap's
+    // scale/opacity swap. A child's transform never affects its own parent's
+    // getBoundingClientRect() (CSS transforms don't change layout boxes), so
+    // this (translating .card-persp) and animateSwap (scaling .card-idle,
+    // one level in) compose without interfering with each other.
+    function slotGap(){
+      var a = slotCenter.getBoundingClientRect();
+      var b = slotNext.getBoundingClientRect();
+      var g = b.left - a.left;
+      return g > 20 ? g : 170;
+    }
+
+    function flipMeasure(persp){
+      return persp.getBoundingClientRect();
+    }
+
+    // FLIP: persp has just been reparented into its new slot (so it already
+    // sits at its new screen position). Snap it back to where it used to be
+    // with no transition, force the browser to commit that, then release it
+    // into an animated transition back to 0 — the slot-to-slot jump reads as
+    // one continuous slide.
+    function flipPlay(persp, firstRect){
+      var last = persp.getBoundingClientRect();
+      var dx = firstRect.left - last.left;
+      var dy = firstRect.top - last.top;
+      if (!dx && !dy) return;
+      persp.style.transition = "none";
+      persp.style.transform = "translate("+dx+"px,"+dy+"px)";
+      persp.getBoundingClientRect(); // force reflow so the jump-back isn't animated
+      persp.style.transition = "transform .42s cubic-bezier(.22,1,.36,1)";
+      persp.style.transform = "translate(0px,0px)";
+    }
+
+    // The exiting card: pull it out of its slot, pin it at that same screen
+    // spot as an absolutely-positioned sibling with a low z-index (below both
+    // .slot-side and .slot-center), then send it further out in the direction
+    // of travel while it shrinks and fades — so the surviving cards sliding
+    // across the same ground visually pass in front of it as it goes.
+    function sendOff(persp, direction){
+      var r = persp.getBoundingClientRect();
+      var rowRect = carouselRow.getBoundingClientRect();
+      var left = r.left - rowRect.left;
+      var top = r.top - rowRect.top;
+      persp.remove();
+      persp.classList.add("card-fly");
+      persp.style.left = left + "px";
+      persp.style.top = top + "px";
+      persp.style.transition = "none";
+      persp.style.transform = "translateX(0px)";
+      carouselRow.appendChild(persp);
+      persp.getBoundingClientRect(); // force reflow
+
+      var idle = persp.querySelector(".card-idle");
+      idle.style.transform = "scale(.5) rotate("+(direction===1?"-11":"11")+"deg)";
+      idle.style.opacity = "0";
+
+      persp.style.transition = "transform .44s cubic-bezier(.4,0,1,1)";
+      persp.style.transform = "translateX("+(-direction*slotGap()*0.85)+"px)";
+
+      setTimeout(function(){ persp.remove(); }, 470);
+    }
+
+    // The freshly-revealed card: it's already built at its final slot's CSS
+    // pose (scale/opacity), so only its position needs to slide in — start it
+    // offset further out in the direction of travel (as if still off-frame,
+    // occluded), then release it to translateX(0).
+    function enterFrom(persp, direction){
+      var offset = direction * slotGap() * 0.85;
+      persp.style.transition = "none";
+      persp.style.transform = "translateX("+offset+"px)";
+      persp.getBoundingClientRect(); // force reflow
+      persp.style.transition = "transform .44s cubic-bezier(.22,1,.36,1)";
+      persp.style.transform = "translateX(0px)";
+    }
+
+    function buildCard(p, idx, role){
+      var persp = document.createElement("div");
+      persp.className = "card-persp";
+      var idle = document.createElement("div");
+      idle.className = "card-idle";
+      var tilt = document.createElement("div");
+      tilt.className = "card-tilt";
+      var glare = document.createElement("div");
+      glare.className = "glare";
+      var inner = document.createElement("div");
+      inner.className = "card-inner";
+      var aura = document.createElement("div");
+      aura.className = "aura";
+      aura.style.background = p.darkGlow ? "#fff" : p.grad;
+      inner.appendChild(aura); // first = painted behind the edges/faces below
+      ["edge-t","edge-r","edge-b","edge-l"].forEach(function(cls){
+        var edge = document.createElement("div");
+        edge.className = "edge " + cls;
+        inner.appendChild(edge);
+      });
+      inner.appendChild(buildFront(p, idx));
+      inner.appendChild(buildBack(p, idx));
+      tilt.appendChild(glare);
+      tilt.appendChild(inner);
+      idle.appendChild(tilt);
+      persp.appendChild(idle);
+
+      tilt.tabIndex = 0;
+      tilt.setAttribute("role","button");
+      tilt.setAttribute("aria-pressed","false");
+      tilt.dataset.role = role;
+      tilt.dataset.pidx = String(idx);
+      tilt.setAttribute("aria-label", roleLabel(role, p, currentLang()));
+      setupTilt(tilt, glare);
+      return persp;
+    }
+
+    function reRole(persp, role, p, idx){
+      var tilt = persp.querySelector(".card-tilt");
+      var aura = persp.querySelector(".aura");
+      tilt.classList.remove("tilting","flipped");
+      tilt.style.transform = "";
+      if (aura) aura.style.background = p.darkGlow ? "#fff" : p.grad;
+      tilt.dataset.role = role;
+      tilt.dataset.pidx = String(idx);
+      tilt.setAttribute("aria-pressed","false");
+      tilt.setAttribute("aria-label", roleLabel(role, p, currentLang()));
+    }
+
+    function setupTilt(tilt, glare){
+      var down = null;
+      var maxDeg = 9;
+      var link = tilt.querySelector(".back-link");
+      if (link){
+        link.addEventListener("pointerdown", function(e){ e.stopPropagation(); });
+        link.addEventListener("pointerup", function(e){ e.stopPropagation(); });
+      }
+      function applyTilt(clientX, clientY){
+        var r = tilt.getBoundingClientRect();
+        var px = Math.min(1, Math.max(0, (clientX - r.left) / r.width));
+        var py = Math.min(1, Math.max(0, (clientY - r.top) / r.height));
+        var rx = (py - 0.5) * -2 * maxDeg;
+        var ry = (px - 0.5) * 2 * maxDeg;
+        tilt.style.transform = "rotateX("+rx.toFixed(2)+"deg) rotateY("+ry.toFixed(2)+"deg)";
+        glare.style.setProperty("--gx",(px*100).toFixed(1)+"%");
+        glare.style.setProperty("--gy",(py*100).toFixed(1)+"%");
+      }
+      function reset(){ tilt.classList.remove("tilting"); tilt.style.transform=""; }
+      function toggleFlip(){
+        var f = tilt.classList.toggle("flipped");
+        tilt.setAttribute("aria-pressed", f?"true":"false");
+      }
+      function activate(){
+        if (tilt.dataset.role === "center"){ toggleFlip(); }
+        else { go(tilt.dataset.role === "prev" ? -1 : 1); }
+      }
+      // While gyroscope tilt owns the center card (see the motion-tilt block below),
+      // pointer-driven tilt steps aside for it so the two don't fight over the same
+      // transform; the card still taps-to-flip normally.
+      function gyroOwnsThisCard(){ return gyroActive && tilt.dataset.role === "center"; }
+      tilt.addEventListener("pointerenter", function(e){ if (gyroOwnsThisCard()) return; tilt.classList.add("tilting"); applyTilt(e.clientX,e.clientY); });
+      tilt.addEventListener("pointermove", function(e){ if (gyroOwnsThisCard()) return; tilt.classList.add("tilting"); applyTilt(e.clientX,e.clientY); });
+      tilt.addEventListener("pointerdown", function(e){
+        down = {x:e.clientX,y:e.clientY,t:Date.now()};
+        try{ tilt.setPointerCapture(e.pointerId); }catch(err){}
+        if (gyroOwnsThisCard()) return;
+        tilt.classList.add("tilting"); applyTilt(e.clientX,e.clientY);
+      });
+      tilt.addEventListener("pointerup", function(e){
+        try{ tilt.releasePointerCapture(e.pointerId); }catch(err){}
+        if (down){
+          var dx=e.clientX-down.x, dy=e.clientY-down.y, dt=Date.now()-down.t;
+          if (Math.hypot(dx,dy)<10 && dt<500){ activate(); }
+        }
+        down = null;
+        if (e.pointerType==="touch"){ reset(); }
+      });
+      tilt.addEventListener("pointercancel", function(){ down=null; reset(); });
+      tilt.addEventListener("pointerleave", function(e){ if (e.pointerType!=="touch"){ reset(); } });
+      tilt.addEventListener("keydown", function(e){
+        if (e.key==="Enter"||e.key===" "){ e.preventDefault(); activate(); }
+      });
+    }
+
+    // ---- Motion (gyroscope/accelerometer) tilt — phones/tablets only ----
+    // Replaces press-and-hold as the way to "inspect" the centre card: once
+    // enabled, tilting the phone itself drives the card's rotation instead of
+    // a finger held on the glass. Falls back to the existing press-and-hold
+    // behaviour whenever motion access isn't available or isn't granted.
+    var gyroActive = false;
+    var gyroBase = null;   // {beta, gamma} captured as the "neutral" pose on enable
+    var gyroRAF = null;
+
+    function applyTiltTo(tilt, rx, ry, px, py){
+      tilt.classList.add("tilting");
+      tilt.style.transform = "rotateX("+rx.toFixed(2)+"deg) rotateY("+ry.toFixed(2)+"deg)";
+      var glare = tilt.querySelector(".glare");
+      if (glare){
+        glare.style.setProperty("--gx",(px*100).toFixed(1)+"%");
+        glare.style.setProperty("--gy",(py*100).toFixed(1)+"%");
+      }
+    }
+
+    function onDeviceOrientation(e){
+      if (e.beta == null || e.gamma == null) return;
+      if (!gyroBase){ gyroBase = {beta:e.beta, gamma:e.gamma}; return; }
+      if (gyroRAF) return;
+      gyroRAF = requestAnimationFrame(function(){
+        gyroRAF = null;
+        var centerTilt = document.querySelector(".slot-center .card-tilt");
+        if (!centerTilt || !gyroActive) return;
+        var maxDeg = 9, range = 24;
+        var db = Math.max(-range, Math.min(range, e.beta - gyroBase.beta));
+        var dg = Math.max(-range, Math.min(range, e.gamma - gyroBase.gamma));
+        var rx = (db/range) * -maxDeg;
+        var ry = (dg/range) * maxDeg;
+        var px = Math.min(1, Math.max(0, 0.5 + (dg/range)*0.5));
+        var py = Math.min(1, Math.max(0, 0.5 + (db/range)*0.5));
+        applyTiltTo(centerTilt, rx, ry, px, py);
+      });
+    }
+
+    function startGyro(){
+      gyroBase = null;
+      gyroActive = true;
+      window.addEventListener("deviceorientation", onDeviceOrientation);
+    }
+    function stopGyro(){
+      gyroActive = false;
+      window.removeEventListener("deviceorientation", onDeviceOrientation);
+      var centerTilt = document.querySelector(".slot-center .card-tilt");
+      if (centerTilt){ centerTilt.classList.remove("tilting"); centerTilt.style.transform=""; }
+    }
+
+    function initGyroToggle(afterEl){
+      var isCoarse = window.matchMedia && window.matchMedia("(hover:none) and (pointer:coarse)").matches;
+      if (!isCoarse) return;
+      var btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "gyro-toggle";
+      function label(on){
+        btn.innerHTML = spanPair(
+          on ? "✦ Motion tilt on — tap to turn off" : "✦ Tilt by moving your phone",
+          on ? "✦ 重力感应已开启 — 点击关闭" : "✦ 移动手机来检视卡牌"
+        );
+      }
+      label(false);
+      btn.addEventListener("click", function(){
+        if (gyroActive){ stopGyro(); btn.classList.remove("on"); label(false); return; }
+        var DOE = window.DeviceOrientationEvent;
+        if (DOE && typeof DOE.requestPermission === "function"){
+          DOE.requestPermission().then(function(state){
+            if (state === "granted"){ startGyro(); btn.classList.add("on"); label(true); }
+            else {
+              btn.innerHTML = spanPair(
+                "✦ Motion access denied — check Settings",
+                "✦ 未获得权限，请到系统设置里开启"
+              );
+            }
+          }).catch(function(){
+            btn.innerHTML = spanPair("✦ Motion tilt unavailable","✦ 当前环境不支持重力感应");
+          });
+        } else if (DOE){
+          startGyro(); btn.classList.add("on"); label(true);
+        } else {
+          btn.disabled = true;
+          btn.innerHTML = spanPair("✦ Motion tilt not supported here","✦ 此设备/浏览器不支持重力感应");
+        }
+        if (typeof syncAllLanguage === "function") syncAllLanguage();
+      });
+      afterEl.insertAdjacentElement("afterend", btn);
+      if (typeof syncAllLanguage === "function") syncAllLanguage();
+    }
+
+    var slotPrev = document.getElementById("slot-prev");
+    var slotCenter = document.getElementById("slot-center");
+    var slotNext = document.getElementById("slot-next");
+    var counter = document.getElementById("counter");
+    var carouselRow = document.querySelector(".carousel-row");
+    var prevBtn = document.getElementById("prev-btn");
+    var nextBtn = document.getElementById("next-btn");
+    initGyroToggle(counter);
+
+    function idx(offset){ return (current+offset+n)%n; }
+
+    function relabelNav(lang){
+      if (prevBtn) prevBtn.setAttribute("aria-label", lang === "zh" ? "上一张" : "Previous slide");
+      if (nextBtn) nextBtn.setAttribute("aria-label", lang === "zh" ? "下一张" : "Next slide");
+    }
+    function relabelCards(lang){
+      document.querySelectorAll(".card-tilt").forEach(function(tilt){
+        var p = platforms[+tilt.dataset.pidx];
+        if (!p) return;
+        tilt.setAttribute("aria-label", roleLabel(tilt.dataset.role, p, lang));
+      });
+    }
+    document.querySelectorAll(".lang-switcher a").forEach(function(link){
+      link.addEventListener("click", function(){
+        var lang = link.textContent.indexOf("中文") !== -1 ? "zh" : "en";
+        relabelNav(lang);
+        relabelCards(lang);
+      });
+    });
+    relabelNav(currentLang());
+
+    function updateCounter(){
+      var p = platforms[current];
+      var nm = platName(p);
+      counter.innerHTML = "<b>0"+(current+1)+"</b> / 0"+n+" · "+spanPair(nm.en, nm.zh);
+      if (typeof syncAllLanguage === "function") syncAllLanguage();
+    }
+
+    // First paint: build all three cards fresh.
+    slotPrev.appendChild(buildCard(platforms[idx(-1)], idx(-1), "prev"));
+    slotCenter.appendChild(buildCard(platforms[current], current, "center"));
+    slotNext.appendChild(buildCard(platforms[idx(1)], idx(1), "next"));
+    updateCounter();
+
+    // Later navigation: reuse the two surviving cards (re-parent + re-role them,
+    // then explicitly animate their .card-idle scale/opacity between the two
+    // known poses, AND their .card-persp screen position via the FLIP helpers
+    // above) so both the grow/shrink swap and the actual conveyor-belt slide
+    // play together; the dropped card recedes behind the others via sendOff,
+    // and the one card newly revealed at the far edge slides in via enterFrom.
+    var animating = false;
+    function go(direction){
+      if (animating || (direction!==1 && direction!==-1)) return;
+      animating = true;
+      var oldCurrent = current;
+      current = idx(direction);
+
+      if (direction === 1){
+        var dropped = slotPrev.firstElementChild;
+        var toPrev = slotCenter.firstElementChild;   // old center -> new prev
+        var toCenter = slotNext.firstElementChild;   // old next -> new center
+        var toPrevRect = toPrev ? flipMeasure(toPrev) : null;
+        var toCenterRect = toCenter ? flipMeasure(toCenter) : null;
+
+        if (dropped) sendOff(dropped, direction);
+
+        if (toPrev){
+          reRole(toPrev, "prev", platforms[oldCurrent], oldCurrent);
+          slotPrev.appendChild(toPrev);
+          animateSwap(toPrev, "center", "prev");
+          flipPlay(toPrev, toPrevRect);
+        }
+        if (toCenter){
+          reRole(toCenter, "center", platforms[current], current);
+          slotCenter.appendChild(toCenter);
+          animateSwap(toCenter, "next", "center");
+          flipPlay(toCenter, toCenterRect);
+        }
+        var freshIdx = idx(1);
+        var fresh = buildCard(platforms[freshIdx], freshIdx, "next");
+        slotNext.appendChild(fresh);
+        enterFrom(fresh, direction);
+      } else {
+        var dropped2 = slotNext.firstElementChild;
+        var toNext = slotCenter.firstElementChild;   // old center -> new next
+        var toCenter2 = slotPrev.firstElementChild;  // old prev -> new center
+        var toNextRect = toNext ? flipMeasure(toNext) : null;
+        var toCenter2Rect = toCenter2 ? flipMeasure(toCenter2) : null;
+
+        if (dropped2) sendOff(dropped2, direction);
+
+        if (toNext){
+          reRole(toNext, "next", platforms[oldCurrent], oldCurrent);
+          slotNext.appendChild(toNext);
+          animateSwap(toNext, "center", "next");
+          flipPlay(toNext, toNextRect);
+        }
+        if (toCenter2){
+          reRole(toCenter2, "center", platforms[current], current);
+          slotCenter.appendChild(toCenter2);
+          animateSwap(toCenter2, "prev", "center");
+          flipPlay(toCenter2, toCenter2Rect);
+        }
+        var freshIdx2 = idx(-1);
+        var fresh2 = buildCard(platforms[freshIdx2], freshIdx2, "prev");
+        slotPrev.appendChild(fresh2);
+        enterFrom(fresh2, direction);
+      }
+
+      updateCounter();
+      if (typeof syncAllLanguage === "function") syncAllLanguage();
+      setTimeout(function(){ animating = false; }, 470);
+    }
+
+    prevBtn.addEventListener("click", function(){ go(-1); });
+    nextBtn.addEventListener("click", function(){ go(1); });
+    window.addEventListener("keydown", function(e){
+      if (e.key === "ArrowLeft"){ go(-1); }
+      if (e.key === "ArrowRight"){ go(1); }
+    });
+
+    // ---- Live stats overlay ----
+    // Runs once after the cards are already on screen with the manually-
+    // entered numbers (so the first paint never waits on a network call).
+    // Whatever /api/social-stats actually returns (see that file — some
+    // platforms come back null until their env vars are set) gets written
+    // into `platforms[]` and, for whichever card happens to be mounted
+    // right now, patched straight into its back-face DOM.
+    function patchStatDOM(p){
+      var idx = platforms.indexOf(p);
+      document.querySelectorAll(".card-tilt").forEach(function(tilt){
+        if (+tilt.dataset.pidx !== idx) return;
+        var oldStat = tilt.querySelector(".face.back .back-stat");
+        if (oldStat) oldStat.outerHTML = statBlockHTML(p);
+      });
+    }
+
+    function applyLiveStats(data){
+      if (!data) return;
+      var byName = {};
+      platforms.forEach(function(p){ byName[p.name] = p; });
+
+      if (data.github && byName.GitHub){
+        var gh = byName.GitHub;
+        gh.stats = [
+          {labelEn:"FOLLOWERS", labelZh:"关注者", value: data.github.followers.toLocaleString()},
+          {labelEn:"PUBLIC REPOS", labelZh:"公开仓库", value: String(data.github.publicRepos)}
+        ];
+        gh.live = true;
+        patchStatDOM(gh);
+      }
+      if (data.youtube && byName.YouTube){
+        var yt = byName.YouTube;
+        yt.stats = [
+          {labelEn:"SUBSCRIBERS", labelZh:"订阅者", value: data.youtube.subscribers.toLocaleString()},
+          {labelEn:"TOTAL VIEWS", labelZh:"总浏览量", value: data.youtube.views.toLocaleString()}
+        ];
+        yt.live = true;
+        patchStatDOM(yt);
+      }
+      // Bilibili: the server function fetches a live follower count too, but
+      // it isn't wired in here yet — total-view automation for that platform
+      // needs an extra (paginated) call this v1 skips. Ask to have it added
+      // once the GitHub/YouTube numbers are confirmed working.
+
+      if (typeof syncAllLanguage === "function") syncAllLanguage();
+    }
+
+    fetch("/api/social-stats")
+      .then(function(r){ return r.ok ? r.json() : null; })
+      .then(applyLiveStats)
+      .catch(function(){ /* stay on the manually-entered numbers */ });
+  })();
+  </script>
 </main>
 
 <footer data-aos="fade-up" data-aos-offset="0">
