@@ -92,6 +92,18 @@
   .chart-tooltip .tt-row + .tt-row { margin-top: 0.2rem; }
   .chart-tooltip .tt-dot { width: 6px; height: 6px; border-radius: 50%; display: inline-block; }
 
+  .analytics-controls { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; }
+  .range-select {
+    background: rgba(10,10,10,0.5); border: 1px solid rgba(255,255,255,0.08); color: #fff;
+    padding: 0.5rem 0.8rem; border-radius: 8px; font-family: 'Inter', sans-serif; font-size: 0.82rem; cursor: pointer;
+  }
+  .custom-range { display: flex; align-items: center; gap: 0.5rem; }
+  .custom-range input[type="date"] {
+    background: rgba(10,10,10,0.5); border: 1px solid rgba(255,255,255,0.08); color: #fff; color-scheme: dark;
+    padding: 0.45rem 0.6rem; border-radius: 8px; font-family: 'Inter', sans-serif; font-size: 0.8rem;
+  }
+  .custom-range span { color: var(--text-muted); font-size: 0.8rem; }
+
   .bar-row { display: flex; align-items: center; gap: 0.7rem; margin-bottom: 0.7rem; font-size: 0.82rem; }
   .bar-row .bar-label { flex: 0 0 40%; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .bar-row .bar-track { flex: 1; background: rgba(255,255,255,0.05); border-radius: 6px; height: 10px; overflow: hidden; }
@@ -236,8 +248,23 @@
     <!-- ================= ANALYTICS PANEL ================= -->
     <section class="panel active" id="panel-analytics">
       <div class="section-title-row">
-        <h2>Traffic Analytics <span style="color:var(--text-muted); font-weight:400; font-size:0.75rem;">(last 30 days)</span></h2>
-        <button class="icon-btn" id="refreshAnalyticsBtn"><i class="bi bi-arrow-clockwise"></i> Refresh</button>
+        <h2>Traffic Analytics <span id="rangeLabel" style="color:var(--text-muted); font-weight:400; font-size:0.75rem;">(last 30 days)</span></h2>
+        <div class="analytics-controls">
+          <select id="rangePreset" class="range-select">
+            <option value="7">Last 7 days</option>
+            <option value="14">Last 14 days</option>
+            <option value="30" selected>Last 30 days</option>
+            <option value="90">Last 90 days</option>
+            <option value="custom">Custom range…</option>
+          </select>
+          <div class="custom-range" id="customRange" style="display:none;">
+            <input type="date" id="rangeStart">
+            <span>–</span>
+            <input type="date" id="rangeEnd">
+            <button class="icon-btn" id="applyRangeBtn">Apply</button>
+          </div>
+          <button class="icon-btn" id="refreshAnalyticsBtn"><i class="bi bi-arrow-clockwise"></i> Refresh</button>
+        </div>
       </div>
 
       <div id="analyticsContent">
@@ -453,11 +480,37 @@ function showToast(msg, isError) {
    ========================================================= */
 let analyticsLoaded = false;
 
+/* ---- Date range state for the analytics tab ---- */
+let analyticsRange = { mode: 'preset', days: 30 };
+
+function formatRangeDate(iso) {
+  const d = new Date(iso + 'T00:00:00Z');
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
+}
+
+function updateRangeLabel() {
+  const label = document.getElementById('rangeLabel');
+  if (!label) return;
+  if (analyticsRange.mode === 'custom' && analyticsRange.start && analyticsRange.end) {
+    label.textContent = `(${formatRangeDate(analyticsRange.start)} – ${formatRangeDate(analyticsRange.end)})`;
+  } else {
+    label.textContent = `(last ${analyticsRange.days} days)`;
+  }
+}
+
+function buildAnalyticsQuery() {
+  if (analyticsRange.mode === 'custom' && analyticsRange.start && analyticsRange.end) {
+    return `start=${analyticsRange.start}&end=${analyticsRange.end}`;
+  }
+  return `days=${analyticsRange.days}`;
+}
+
 async function loadAnalytics() {
   const el = document.getElementById('analyticsContent');
   el.innerHTML = '<div class="empty-state">Loading analytics…</div>';
+  updateRangeLabel();
   try {
-    const resp = await fetch('/api/admin/analytics');
+    const resp = await fetch('/api/admin/analytics?' + buildAnalyticsQuery());
     const data = await resp.json();
 
     if (!data.configured) {
@@ -536,9 +589,25 @@ function renderAnalytics(data) {
   `;
 
   drawTrafficChart(data.byDate);
-  renderBarList('topPagesList', data.topPages, (row) => row.dimensionValues[0].value.replace(/\.html$/, '') || '/');
+  renderBarList('topPagesList', data.topPages, (row) => pageLabel(row.dimensionValues[0].value));
   renderBarList('deviceList', data.devices, (row) => row.dimensionValues[0].value);
   renderBarList('countryList', data.countries, (row) => row.dimensionValues[0].value);
+}
+
+/* Maps this site's known routes to a readable name, so "Top Pages" shows
+   e.g. "Home (/)" instead of just a bare, easy-to-miss "/". Unknown paths
+   fall back to the raw path itself. */
+const PAGE_NAMES = {
+  '/': 'Home',
+  '/index': 'Home',
+  '/portfolio': 'Portfolio',
+  '/contact': 'Contact',
+  '/socialmedia': 'Social Media',
+};
+function pageLabel(path) {
+  const clean = (path || '/').replace(/\.html$/, '') || '/';
+  const name = PAGE_NAMES[clean];
+  return name ? `${name} (${clean})` : clean;
 }
 
 function renderBarList(containerId, report, labelFn) {
@@ -725,6 +794,36 @@ function resolveAssetUrl(path) {
 }
 
 document.getElementById('refreshAnalyticsBtn').addEventListener('click', loadAnalytics);
+
+document.getElementById('rangePreset').addEventListener('change', (e) => {
+  const val = e.target.value;
+  const customRange = document.getElementById('customRange');
+  if (val === 'custom') {
+    customRange.style.display = 'flex';
+    const startInput = document.getElementById('rangeStart');
+    const endInput = document.getElementById('rangeEnd');
+    if (!startInput.value || !endInput.value) {
+      const end = new Date();
+      const start = new Date(end);
+      start.setUTCDate(start.getUTCDate() - 29);
+      endInput.value = end.toISOString().slice(0, 10);
+      startInput.value = start.toISOString().slice(0, 10);
+    }
+    return; // wait for the Apply click before reloading
+  }
+  customRange.style.display = 'none';
+  analyticsRange = { mode: 'preset', days: Number(val) };
+  loadAnalytics();
+});
+
+document.getElementById('applyRangeBtn').addEventListener('click', () => {
+  const start = document.getElementById('rangeStart').value;
+  const end = document.getElementById('rangeEnd').value;
+  if (!start || !end) { showToast('Pick both a start and end date.', true); return; }
+  if (start > end) { showToast('Start date must be before end date.', true); return; }
+  analyticsRange = { mode: 'custom', start, end };
+  loadAnalytics();
+});
 
 /* =========================================================
    4. Portfolio works manager

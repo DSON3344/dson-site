@@ -34,6 +34,38 @@ function zeroFillByDate(report, startDate, endDate) {
   return Object.assign({}, report, { rows });
 }
 
+const MIN_RANGE_DAYS = 1;
+const MAX_RANGE_DAYS = 365;
+const DEFAULT_RANGE_DAYS = 30;
+
+function isIsoDate(s) {
+  return typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s);
+}
+
+/**
+ * Reads the requested date range off the query string: either an explicit
+ * ?start=YYYY-MM-DD&end=YYYY-MM-DD, or a ?days=N preset (defaults to 30).
+ * Vercel's Node runtime normally parses req.query for us, but we fall back
+ * to parsing req.url directly in case it isn't populated.
+ */
+function resolveDateRange(req) {
+  const query = req.query || Object.fromEntries(new URL(req.url, 'http://localhost').searchParams);
+  const today = new Date();
+  const todayStr = today.toISOString().slice(0, 10);
+
+  if (isIsoDate(query.start) && isIsoDate(query.end) && query.start <= query.end) {
+    return { startDate: query.start, endDate: query.end };
+  }
+
+  let days = parseInt(query.days, 10);
+  if (!Number.isFinite(days)) days = DEFAULT_RANGE_DAYS;
+  days = Math.min(Math.max(days, MIN_RANGE_DAYS), MAX_RANGE_DAYS);
+
+  const startDateObj = new Date(today);
+  startDateObj.setUTCDate(startDateObj.getUTCDate() - (days - 1));
+  return { startDate: startDateObj.toISOString().slice(0, 10), endDate: todayStr };
+}
+
 module.exports = async (req, res) => {
   if (!requireAuth(req, res)) return;
 
@@ -45,13 +77,10 @@ module.exports = async (req, res) => {
     const propertyId = process.env.GA_PROPERTY_ID;
     const accessToken = await getAccessToken();
 
-    // Use concrete calendar dates (rather than GA4's relative "30daysAgo")
-    // so the zero-fill above can walk the exact same range.
-    const endDateObj = new Date();
-    const startDateObj = new Date(endDateObj);
-    startDateObj.setUTCDate(startDateObj.getUTCDate() - 29);
-    const startDate = startDateObj.toISOString().slice(0, 10);
-    const endDate = endDateObj.toISOString().slice(0, 10);
+    // Concrete calendar dates (rather than GA4's relative "30daysAgo") so the
+    // zero-fill above can walk the exact same range, and so a custom range
+    // picked in the dashboard maps straight onto the GA4 request.
+    const { startDate, endDate } = resolveDateRange(req);
     const range = { startDate, endDate };
 
     const [summary, byDateRaw, topPages, devices, countries] = await Promise.all([
