@@ -143,18 +143,25 @@ function renderPortfolioUI() {
         // Bento Grid Logic (Desktop)
         const bentoClass = (index % 4 === 0 || index % 4 === 3) ? 'bento-large' : '';
 
+        // Row markup (presentation only): one project per row of the index list,
+        // keyboard-focusable, with the year shown. Data flow and openModal() are unchanged.
         grid.innerHTML += `
-            <div class="portfolio-item ${bentoClass}" onclick="openModal('${uniqueKey}')">
-              <div class="portfolio-bg">
-                <img src="${work.thumbnail}" alt="${work.title}" class="portfolio-img" onerror="this.src='Image/Logo_Colour.png'">
+            <div class="portfolio-item work-row" data-cat="${work.category}" role="button" tabindex="0"
+                 onclick="openModal('${uniqueKey}')"
+                 onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openModal('${uniqueKey}');}">
+              <div class="work-thumb">
+                <img src="${work.thumbnail}" alt="${work.title}" class="work-img" loading="lazy" decoding="async" onerror="this.src='Image/Logo_Colour.png'">
               </div>
-              <div class="portfolio-overlay"></div>
-              <div class="portfolio-info">
-                <span class="lang-en">${labels.en}</span>
-                <span class="lang-zh">${labels.zh}</span>
+              <div class="work-main">
                 <h3 class="lang-en">${work.title}</h3>
                 <h3 class="lang-zh">${work.title_zh || work.title}</h3>
+                <p class="work-meta">
+                  <span class="lang-en">${labels.en}</span>
+                  <span class="lang-zh">${labels.zh}</span>
+                  <span class="work-year">${work.year || ''}</span>
+                </p>
               </div>
+              <i class="bi bi-arrow-up-right work-arrow" aria-hidden="true"></i>
             </div>
         `;
     });

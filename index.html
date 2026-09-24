@@ -23,165 +23,153 @@
   
   <link rel="icon" type="image/png" href="Image/DSON logo.png">
   
-  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=Inter:wght@300;400;500;600&family=Noto+Sans+SC:wght@300;400;700&display=swap" rel="stylesheet">
+  <link rel="preload" href="fonts/syne-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
   
-  <link href="https://unpkg.com/aos@2.3.1/dist/aos.css" rel="stylesheet">
-  <link rel="stylesheet" href="DSON.css">
+  <script>document.documentElement.classList.add("js");setTimeout(function(){if(!window.__siteReady)document.documentElement.classList.add("reveal-all")},2500);</script>
+  <link rel="stylesheet" href="site.css">
   <script src="ga4-tracking.js"></script>
 </head>
 <body>
 
-<nav id="main-nav">
-  <a href="index.html" class="nav-logo">
-    <img src="Image/Logo_Colour.png" alt="Chang Dick Shen (DSON) - Integrated Multimedia Designer Logo" style="height: 36px; width: auto;">
+<nav id="main-nav" aria-label="Main">
+  <a href="index.html" class="nav-logo" aria-label="DSON home">
+    <img src="Image/Logo_Colour.png" alt="Chang Dick Shen (DSON) logo">
   </a>
-  
-  <div class="menu-toggle" id="menu-toggle">
-    <i class="bi bi-list open-icon"></i>
-    <i class="bi bi-x-lg close-icon" style="display: none;"></i>
+
+  <div class="rail-menu" id="rail-menu">
+    <ul class="nav-links">
+        <li><a href="index.html" class="active" aria-current="page"><span class="lang-en">Home</span><span class="lang-zh">首页</span></a></li>
+        <li><a href="portfolio.html"><span class="lang-en">Portfolio</span><span class="lang-zh">作品集</span></a></li>
+        <li><a href="socialmedia.html"><span class="lang-en">Social</span><span class="lang-zh">社交媒体</span></a></li>
+        <li><a href="contact.html"><span class="lang-en">Contact</span><span class="lang-zh">联系我</span></a></li>
+    </ul>
   </div>
 
-  <ul class="nav-links">
-    <li><a href="index.html" class="active"><span class="lang-en">Home</span><span class="lang-zh">首页</span></a></li>
-    <li><a href="portfolio.html"><span class="lang-en">Portfolio</span><span class="lang-zh">作品集</span></a></li>
-    <li><a href="socialmedia.html"><span class="lang-en">Social</span><span class="lang-zh">社交媒体</span></a></li>
-    <li><a href="contact.html"><span class="lang-en">Contact</span><span class="lang-zh">联系我</span></a></li>
-  </ul>
-  
   <div class="lang-switcher">
     <a href="#" data-lang-select="en">ENG</a>
     <a href="#" data-lang-select="zh">中文</a>
   </div>
+
+  <button type="button" class="rail-toggle" id="menu-toggle" aria-expanded="false" aria-controls="rail-menu">
+    <span class="t-open"><span class="lang-en">Menu</span><span class="lang-zh">菜单</span></span>
+    <span class="t-close"><span class="lang-en">Close</span><span class="lang-zh">关闭</span></span>
+  </button>
 </nav>
 
 <main>
-  <section class="hero" data-aos="fade-in">
-    <div class="hero-text" data-aos="fade-right" data-aos-delay="200">
-      <span class="hero-eyebrow">
-        <span class="lang-en">Creative Digital Arts</span><span class="lang-zh">创意数字艺术</span>
-      </span>
-      <h1>
-        <span class="lang-en">Crafting<br><em>Digital</em><br>Experiences</span>
-        <span class="lang-zh">打造<br><em>卓越的</em><br>数字体验</span>
-      </h1>
-      <p class="hero-desc">
-        <span class="lang-en">Hi! I’m <strong>Chang Dick Shen</strong>, but you can call me <strong>DSON</strong>. I'm an Integrated Multimedia Designer with a deep passion for video production, UI/UX design, web development, and 3D animation.</span>
-        <span class="lang-zh">你好！我是<strong>郑迪绅</strong>，你也可以叫我 <strong>DSON</strong>。我是一名综合多媒体设计师，对视频制作、UI/UX 设计、网页开发和 3D 动画充满热情。</span> 
-      </p>
-      <div class="btn-group">
-        <a href="portfolio.html" class="btn-primary"><span class="lang-en">View Portfolio</span><span class="lang-zh">浏览作品集</span></a>
-        <a href="socialmedia.html" class="btn-outline"><span class="lang-en">Follow My Journey</span><span class="lang-zh">关注我的旅程</span></a>
-      </div>
+  <section class="hero">
+    <div class="hero-meta">
+      <span class="label">Johor / Kuala Lumpur, Malaysia</span>
+      <span class="label avail"><i aria-hidden="true"></i><span class="lang-en">Open for freelance</span><span class="lang-zh">接受自由项目</span></span>
     </div>
-    
-    <div class="hero-visual" data-aos="fade-left" data-aos-delay="400">
-      <div class="hero-grid-bg"></div>
-      <div class="hero-img-frame">
-        <img src="Image/ChangDickShen_Portrait.png" alt="Portrait of Chang Dick Shen (DSON), UI/UX and Multimedia Designer">
+
+    <div class="hero-body">
+      <div class="hero-copy">
+        <h1>
+          <span class="lang-en">Video, interface and 3D, made by <em>one</em> designer.</span>
+          <span class="lang-zh">视频、界面与三维，<em>一个人</em>完成。</span>
+        </h1>
+        <p class="hero-desc">
+          <span class="lang-en">Hi, I’m <strong>Chang Dick Shen</strong>, but call me <strong>DSON</strong>. I’m an integrated multimedia designer working in video production, UI/UX design, web development and 3D animation.</span>
+          <span class="lang-zh">你好，我是<strong>郑迪绅</strong>，叫我 <strong>DSON</strong> 就好。我是一名综合多媒体设计师，做视频制作、UI/UX 设计、网页开发和 3D 动画。</span>
+        </p>
+        <div class="btn-group">
+          <a href="portfolio.html" class="btn-primary"><span class="lang-en">View portfolio</span><span class="lang-zh">浏览作品集</span></a>
+          <a href="contact.html" class="btn-outline"><span class="lang-en">Get in touch</span><span class="lang-zh">联系我</span></a>
+        </div>
       </div>
-      <div class="float-badge top-left" data-aos="zoom-in" data-aos-delay="600"><span class="dot"></span><span class="lang-en">UI/UX Designer</span><span class="lang-zh">UI/UX 设计师</span></div>
-      <div class="float-badge top-right" data-aos="zoom-in" data-aos-delay="700"><span class="dot"></span><span class="lang-en">Video Creator</span><span class="lang-zh">视频创作者</span></div>
-      <div class="float-badge bottom-left" data-aos="zoom-in" data-aos-delay="800"><span class="dot"></span><span class="lang-en">Content Creator</span><span class="lang-zh">内容创作者</span></div>
-      <div class="float-badge bottom-right" data-aos="zoom-in" data-aos-delay="900"><span class="dot"></span><span class="lang-en">Web Developer</span><span class="lang-zh">网页开发者</span></div>
+
+      <figure class="hero-figure">
+        <div class="portrait">
+          <img src="Image/ChangDickShen_Portrait.png" alt="Portrait of Chang Dick Shen (DSON), integrated multimedia designer" width="1024" height="1024">
+        </div>
+        <span class="frame" aria-hidden="true"></span>
+      </figure>
+    </div>
+
+    <div class="hero-word" aria-hidden="true">DSON</div>
+  </section>
+
+  <section class="section" aria-labelledby="selected-title">
+    <div class="section-head">
+      <h2 id="selected-title"><span class="lang-en">Selected work</span><span class="lang-zh">精选作品</span></h2>
+      <a href="portfolio.html" class="text-link"><span class="lang-en">All work</span><span class="lang-zh">全部作品</span><i class="bi bi-arrow-up-right" aria-hidden="true"></i></a>
+    </div>
+
+    <div class="reels">
+      <a href="portfolio.html" class="reel">
+        <div class="reel-info">
+          <h3 class="lang-en">The Last Stand: Unofficial Music Video</h3>
+          <h3 class="lang-zh">The Last Stand 非官方音乐视频</h3>
+          <p class="reel-meta"><span class="lang-en">Video</span><span class="lang-zh">视频制作</span><span class="yr">2025</span></p>
+        </div>
+        <figure class="reel-frame"><img src="Image/selected/last-stand.webp" alt="The Last Stand, unofficial CODM World Championship 2025 music video" loading="lazy" decoding="async"></figure>
+      </a>
+
+      <a href="portfolio.html" class="reel">
+        <div class="reel-info">
+          <h3 class="lang-en">VisionLogic AI User Interface</h3>
+          <h3 class="lang-zh">VisionLogic AI 用户界面设计</h3>
+          <p class="reel-meta"><span class="lang-en">UI/UX</span><span class="lang-zh">UI/UX 设计</span><span class="yr">2026</span></p>
+        </div>
+        <figure class="reel-frame top"><img src="Image/selected/visionlogic-ui.webp" alt="VisionLogic AI user interface, account page" loading="lazy" decoding="async"></figure>
+      </a>
+
+      <a href="portfolio.html" class="reel">
+        <div class="reel-info">
+          <h3 class="lang-en">Mechanical Keyboard 3D Modeling</h3>
+          <h3 class="lang-zh">机械键盘 3D 建模</h3>
+          <p class="reel-meta"><span class="lang-en">3D modeling</span><span class="lang-zh">3D 建模</span><span class="yr">2025</span></p>
+        </div>
+        <figure class="reel-frame"><img src="Image/selected/keyboard-3d.webp" alt="Mechanical keyboard modeled and rendered in Maya" loading="lazy" decoding="async"></figure>
+      </a>
+
+      <a href="portfolio.html" class="reel">
+        <div class="reel-info">
+          <h3 class="lang-en">Substance Abuse</h3>
+          <h3 class="lang-zh">物质滥用</h3>
+          <p class="reel-meta"><span class="lang-en">Image manipulation</span><span class="lang-zh">图像合成</span><span class="yr">2024</span></p>
+        </div>
+        <figure class="reel-frame"><img src="Image/selected/substance-abuse.webp" alt="Substance Abuse, a photo manipulation of a figure trapped in a bottle" loading="lazy" decoding="async"></figure>
+      </a>
     </div>
   </section>
 
-  <div class="software-grid" data-aos="fade-up">
-    <span style="color:var(--text-muted); font-size: 0.8rem; letter-spacing: 0.1em; text-transform: uppercase; align-self: center;">
-      <span class="lang-en">Toolkit</span><span class="lang-zh">我的工具箱</span>
-    </span>
-    <img src="Image/Pr2.png" alt="Premiere Pro" title="Adobe Premiere Pro">
-    <img src="Image/Ps2.png" alt="Photoshop" title="Adobe Photoshop">
-    <img src="Image/Ai2.png" alt="Illustrator" title="Adobe Illustrator">
-    <img src="Image/Ae.png" alt="After Effects" title="Adobe After Effects">
-    <img src="Image/Au2.png" alt="Audition" title="Adobe Audition">
-    <img src="Image/Maya.png" alt="Maya" title="Autodesk Maya">
-    <img src="Image/Figma.png" alt="Figma" title="Figma">
-    <img src="Image/Visual_Studio_Code.png" alt="VS Code" title="Visual Studio Code">
-  </div>
+  <section class="section" aria-labelledby="disciplines-title" style="container-type:inline-size">
+    <div class="statement">
+      <h2 class="label" id="disciplines-title"><span class="lang-en">What I do</span><span class="lang-zh">我做什么</span></h2>
+      <p class="statement-text">
+        <span class="lang-en">Video production<span class="soft">,</span> UI/UX design<span class="soft">,</span> 3D modeling and animation<span class="soft">,</span> photo editing<span class="soft">,</span> image manipulation <span class="soft">and</span> graphic design<span class="soft">.</span></span>
+        <span class="lang-zh">视频制作<span class="soft">、</span>UI/UX 设计<span class="soft">、</span>3D 建模与动画<span class="soft">、</span>照片后期<span class="soft">、</span>图像合成<span class="soft">、</span>平面设计<span class="soft">。</span></span>
+      </p>
 
-  <section class="skills-section">
-    <div class="section-header" data-aos="fade-up">
-      <h2 class="section-title">
-        <span class="lang-en">Core Disciplines</span><span class="lang-zh">核心专业领域</span>
-      </h2>
-      <a href="portfolio.html" class="section-link"><span class="lang-en">View all work &rarr;</span><span class="lang-zh">查看所有作品 &rarr;</span></a>
-    </div>
-    
-    <div class="skills-grid">
-      <div class="skill-card" data-aos="fade-up" data-aos-delay="100">
-        <div class="skill-icon"><i class="bi bi-camera-video"></i></div>
-        <h4><span class="lang-en">Video Production</span><span class="lang-zh">视频制作</span></h4>
-        <p><span class="lang-en">Comprehensive video editing, motion graphics, and esports content creation.</span><span class="lang-zh">全方位视频剪辑、动态图形设计以及电竞内容创作。</span></p>
-      </div>
-      <div class="skill-card" data-aos="fade-up" data-aos-delay="200">
-        <div class="skill-icon"><i class="bi bi-layout-wtf"></i></div>
-        <h4><span class="lang-en">UI/UX Design</span><span class="lang-zh">UI/UX 设计</span></h4>
-        <p><span class="lang-en">Crafting intuitive, user-centered digital interfaces with modern aesthetics.</span><span class="lang-zh">打造直观、以用户为中心且具现代美感的数字界面。</span></p>
-      </div>
-      <div class="skill-card" data-aos="fade-up" data-aos-delay="300">
-        <div class="skill-icon"><i class="bi bi-box"></i></div>
-        <h4><span class="lang-en">3D Modeling & Animation</span><span class="lang-zh">3D 建模与动画</span></h4>
-        <p><span class="lang-en">Bringing concepts to life using Autodesk Maya for digital environments and assets.</span><span class="lang-zh">使用 Autodesk Maya 将概念转化为栩栩如生的数字环境和资产。</span></p>
-      </div>
-      <div class="skill-card" data-aos="fade-up" data-aos-delay="400">
-        <div class="skill-icon"><i class="bi bi-camera"></i></div>
-        <h4><span class="lang-en">Photo Editing</span><span class="lang-zh">照片后期</span></h4>
-        <p><span class="lang-en">Professional skin retouching, color grading, and lighting enhancement for portraits.</span><span class="lang-zh">专业的人像皮肤精修、色彩分级以及光影增强。</span></p>
-      </div>
-      <div class="skill-card" data-aos="fade-up" data-aos-delay="500">
-        <div class="skill-icon"><i class="bi bi-magic"></i></div>
-        <h4><span class="lang-en">Image Manipulation</span><span class="lang-zh">图像合成</span></h4>
-        <p><span class="lang-en">Creating surreal digital worlds by seamlessly blending multiple photographic elements.</span><span class="lang-zh">通过无缝融合多种摄影元素，创造超现实的数字世界。</span></p>
-      </div>
-      <div class="skill-card" data-aos="fade-up" data-aos-delay="600">
-        <div class="skill-icon"><i class="bi bi-vector-pen"></i></div>
-        <h4><span class="lang-en">Graphic Design</span><span class="lang-zh">平面设计</span></h4>
-        <p><span class="lang-en">Brand identity systems, typography, and visual communication that makes an impact.</span><span class="lang-zh">极具影响力的品牌视觉识别系统、排版及视觉传达设计。</span></p>
+
+      <div class="toolbar">
+        <div><span class="label"><span class="lang-en">Video and audio</span><span class="lang-zh">视频与音频</span></span><p>Premiere Pro, After Effects, DaVinci Resolve, Audition</p></div>
+        <div><span class="label"><span class="lang-en">Image and graphic</span><span class="lang-zh">图像与平面</span></span><p>Photoshop, Lightroom, Illustrator</p></div>
+        <div><span class="label"><span class="lang-en">Interface, 3D and code</span><span class="lang-zh">界面、3D 与代码</span></span><p>Figma, Maya, VS Code</p></div>
       </div>
     </div>
+  </section>
+
+  <section class="cta-band">
+    <span class="label"><span class="lang-en">Contact</span><span class="lang-zh">联系</span></span>
+    <a href="contact.html" class="cta-link">
+      <span class="lang-en">Got a project?</span>
+      <span class="lang-zh">有项目要做？</span>
+    </a>
   </section>
 </main>
 
-<footer data-aos="fade-up" data-aos-offset="0">
-  <div class="logo" style="color: var(--accent); font-weight: bold;">DSON</div>
+<footer>
+  <span class="logo">DSON</span>
   <p><span class="lang-en">© 2025-2026 DSON. All rights reserved.</span><span class="lang-zh">© 2025-2026 DSON. 保留所有权利。</span></p>
 </footer>
 
 <script src="DSON.js" defer></script>
-
-<script src="https://unpkg.com/aos@2.3.1/dist/aos.js"></script>
-<script>
-  // Initialize AOS
-  AOS.init({
-    duration: 1000, 
-    easing: 'ease-out-cubic', 
-    once: true, 
-    offset: 120 
-  });
-
-  // Added: Hamburger Menu Interactive Logic
-  const menuToggle = document.getElementById('menu-toggle');
-  const mainNav = document.getElementById('main-nav');
-  const openIcon = document.querySelector('.open-icon');
-  const closeIcon = document.querySelector('.close-icon');
-
-  if (menuToggle && mainNav) {
-      menuToggle.addEventListener('click', () => {
-          mainNav.classList.toggle('nav-active');
-          
-          // Switch burger icon and X icon dynamically
-          if (mainNav.classList.contains('nav-active')) {
-              openIcon.style.display = 'none';
-              closeIcon.style.display = 'block';
-          } else {
-              openIcon.style.display = 'block';
-              closeIcon.style.display = 'none';
-          }
-      });
-  }
-</script>
-
+<script src="site.js" defer></script>
 </body>
 </html>
