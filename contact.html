@@ -23,11 +23,13 @@
   
   <link rel="icon" type="image/png" href="Image/DSON logo.png">
   
-  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=Inter:wght@300;400;500;600&family=Noto+Sans+SC:wght@300;400;700&display=swap" rel="stylesheet">
+  <link rel="preload" href="fonts/syne-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
   
-  <link href="https://unpkg.com/aos@2.3.1/dist/aos.css" rel="stylesheet">
-  <link rel="stylesheet" href="DSON.css">
+  <script>document.documentElement.classList.add("js");setTimeout(function(){if(!window.__siteReady)document.documentElement.classList.add("reveal-all")},2500);</script>
+  <link rel="stylesheet" href="site.css">
   <script src="ga4-tracking.js"></script>
 
   <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
@@ -38,294 +40,87 @@
     })();
   </script>
 
-  <style>
-    .contact-wrapper {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
-      gap: 3rem;
-      align-items: center;
-      max-width: 1200px;
-      margin: 0 auto;
-      overflow-x: hidden; 
-    }
-
-    .contact-right {
-      background: rgba(255, 255, 255, 0.02);
-      backdrop-filter: blur(16px);
-      -webkit-backdrop-filter: blur(16px);
-      padding: 2rem;
-      border-radius: 20px;
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.1);
-    }
-
-    .custom-input {
-      width: 100%;
-      padding: 0.75rem 1rem;
-      background: rgba(10, 10, 10, 0.5);
-      border: 1px solid rgba(255, 255, 255, 0.06);
-      border-radius: 10px;
-      color: #fff;
-      font-family: 'Inter', sans-serif;
-      font-size: 0.9rem;
-      outline: none;
-      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-      color-scheme: dark;
-    }
-
-    .custom-input::placeholder { color: rgba(255, 255, 255, 0.25); }
-    .custom-input:hover { background: rgba(20, 20, 20, 0.7); border-color: rgba(255, 255, 255, 0.15); }
-    .custom-input:focus {
-      background: rgba(0, 0, 0, 0.8);
-      border-color: var(--accent);
-      box-shadow: 0 0 0 4px rgba(0, 212, 255, 0.15), inset 0 0 0 1px var(--accent);
-    }
-
-    input[type="number"]::-webkit-inner-spin-button,
-    input[type="number"]::-webkit-outer-spin-button { filter: invert(1) brightness(0.7); cursor: pointer; }
-
-    select.custom-input {
-      appearance: none;
-      background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='rgba(255,255,255,0.5)' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
-      background-repeat: no-repeat;
-      background-position: right 1rem center;
-      background-size: 1.1em;
-      cursor: pointer;
-    }
-    select.custom-input option { background-color: #121212; color: #fff; font-weight: 500; }
-    select.custom-input option:checked { background-color: rgba(0, 212, 255, 0.2); color: var(--accent); }
-
-    .submit-btn {
-      width: 100%;
-      padding: 0.85rem;
-      background: linear-gradient(135deg, var(--accent) 0%, #0077b6 100%);
-      color: #000;
-      font-family: 'Syne', sans-serif;
-      font-weight: 800;
-      font-size: 0.95rem;
-      text-transform: uppercase;
-      letter-spacing: 0.15em;
-      border: none;
-      border-radius: 10px;
-      cursor: pointer;
-      transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-      box-shadow: 0 8px 20px rgba(0, 212, 255, 0.25);
-      margin-top: 0.5rem;
-    }
-    .submit-btn:hover { transform: translateY(-2px) scale(1.01); box-shadow: 0 12px 25px rgba(0, 212, 255, 0.35); filter: brightness(1.1); }
-    .submit-btn:disabled { opacity: 0.7; cursor: not-allowed; transform: none; box-shadow: none; }
-
-    .input-label {
-      display: block;
-      margin-bottom: 0.4rem;
-      color: var(--text-muted);
-      font-size: 0.75rem;
-      text-transform: uppercase;
-      letter-spacing: 0.1em;
-      font-weight: 600;
-    }
-
-    /* ✨ Custom Alert Modal Styles ✨ */
-    .custom-alert-overlay {
-      position: fixed;
-      top: 0; left: 0; right: 0; bottom: 0;
-      background: rgba(0, 0, 0, 0.8);
-      backdrop-filter: blur(10px);
-      -webkit-backdrop-filter: blur(10px);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      z-index: 100000;
-      opacity: 0;
-      visibility: hidden;
-      transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-    }
-    .custom-alert-overlay.show {
-      opacity: 1;
-      visibility: visible;
-    }
-    .custom-alert-box {
-      background: rgba(17, 21, 32, 0.95);
-      border: 1px solid rgba(0, 210, 255, 0.2);
-      border-radius: 20px;
-      padding: 3rem 2.5rem;
-      text-align: center;
-      max-width: 90%;
-      width: 400px;
-      transform: translateY(30px) scale(0.95);
-      transition: all 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-      box-shadow: 0 25px 60px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.1);
-    }
-    .custom-alert-overlay.show .custom-alert-box {
-      transform: translateY(0) scale(1);
-    }
-    .alert-icon {
-      font-size: 3.5rem;
-      margin-bottom: 1.2rem;
-    }
-    .alert-icon.success { color: #00e676; text-shadow: 0 0 20px rgba(0, 230, 118, 0.4); }
-    .alert-icon.error { color: #ff4d4d; text-shadow: 0 0 20px rgba(255, 77, 77, 0.4); }
-    
-    .custom-alert-box h3 {
-      font-family: 'Syne', sans-serif;
-      font-size: 1.6rem;
-      font-weight: 800;
-      margin-bottom: 0.8rem;
-      color: #fff;
-    }
-    .custom-alert-box p {
-      font-family: 'Inter', sans-serif;
-      font-size: 1rem;
-      color: var(--text-muted);
-      margin-bottom: 2.2rem;
-      line-height: 1.6;
-    }
-    .alert-close-btn {
-      background: var(--accent);
-      color: #000;
-      border: none;
-      padding: 12px 40px;
-      border-radius: 8px;
-      font-family: 'Inter', sans-serif;
-      font-weight: 700;
-      font-size: 1rem;
-      cursor: pointer;
-      transition: all 0.3s ease;
-      text-transform: uppercase;
-      letter-spacing: 0.1em;
-    }
-    .alert-close-btn:hover {
-      transform: translateY(-3px);
-      box-shadow: 0 8px 20px rgba(0, 210, 255, 0.4);
-      background: var(--accent-dark);
-    }
-  </style>
 </head>
 <body>
 
-<nav id="main-nav">
-  <a href="index.html" class="nav-logo">
-    <img src="Image/Logo_Colour.png" alt="Chang Dick Shen (DSON) - Integrated Multimedia Designer Logo" style="height: 36px; width: auto;">
+<nav id="main-nav" aria-label="Main">
+  <a href="index.html" class="nav-logo" aria-label="DSON home">
+    <img src="Image/Logo_Colour.png" alt="Chang Dick Shen (DSON) logo">
   </a>
-  <ul class="nav-links">
-    <li><a href="index.html"><span class="lang-en">Home</span><span class="lang-zh">首页</span></a></li>
-    <li><a href="portfolio.html"><span class="lang-en">Portfolio</span><span class="lang-zh">作品集</span></a></li>
-    <li><a href="socialmedia.html"><span class="lang-en">Social</span><span class="lang-zh">社交媒体</span></a></li>
-    <li><a href="contact.html" class="active"><span class="lang-en">Contact</span><span class="lang-zh">联系我</span></a></li>
-  </ul>
+
+  <div class="rail-menu" id="rail-menu">
+    <ul class="nav-links">
+        <li><a href="index.html"><span class="lang-en">Home</span><span class="lang-zh">首页</span></a></li>
+        <li><a href="portfolio.html"><span class="lang-en">Portfolio</span><span class="lang-zh">作品集</span></a></li>
+        <li><a href="socialmedia.html"><span class="lang-en">Social</span><span class="lang-zh">社交媒体</span></a></li>
+        <li><a href="contact.html" class="active" aria-current="page"><span class="lang-en">Contact</span><span class="lang-zh">联系我</span></a></li>
+    </ul>
+  </div>
+
   <div class="lang-switcher">
     <a href="#" data-lang-select="en">ENG</a>
     <a href="#" data-lang-select="zh">中文</a>
   </div>
-  
-  <div class="menu-toggle" id="mobile-menu">
-    <i class="bi bi-list"></i>
-  </div>
+
+  <button type="button" class="rail-toggle" id="menu-toggle" aria-expanded="false" aria-controls="rail-menu">
+    <span class="t-open"><span class="lang-en">Menu</span><span class="lang-zh">菜单</span></span>
+    <span class="t-close"><span class="lang-en">Close</span><span class="lang-zh">关闭</span></span>
+  </button>
 </nav>
 
-<main>
-  <div class="contact-wrapper">
-    
-    <div class="contact-left" data-aos="fade-right" data-aos-duration="1200">
-      <h1>
-        <span class="lang-en">Get in Touch</span><span class="lang-zh">联系我</span>
-      </h1>
-      <p style="color: var(--text-muted); line-height: 1.7; max-width: 600px; font-size: 0.95rem;">
-        <span class="lang-en">My mission is to transform creativity into work that resonates, inspires, and connects. Feel free to reach out through social media, email, or by dropping a message here.</span>
-        <span class="lang-zh">我的使命是将创意转化为能引起共鸣、启发灵感并建立连接的作品。欢迎随时通过社交媒体、邮件或直接在右侧留言与我交流合作。</span>
-      </p>
-      
-      <div class="contact-info" style="margin-top: 2rem; display: flex; flex-direction: column; gap: 1.5rem;">
-        <div class="contact-item" style="display: flex; align-items: flex-start; gap: 1rem;">
-          <div class="contact-item-icon" style="color: var(--accent); font-size: 1.6rem;"><i class="bi bi-geo-alt"></i></div>
-          <div class="contact-item-text">
-            <label class="input-label" style="margin-bottom: 0.2rem;">
-              <span class="lang-en">Location</span><span class="lang-zh">位置</span>
-            </label>
-            <span style="font-family: 'Inter', sans-serif; font-size: 1.05rem; font-weight: 500;">
-              Johor / Kuala Lumpur, Malaysia
-            </span>
-          </div>
-        </div>
-        
-        <div class="contact-item" style="display: flex; align-items: flex-start; gap: 1rem;">
-          <div class="contact-item-icon" style="color: var(--accent); font-size: 1.6rem;"><i class="bi bi-envelope"></i></div>
-          <div class="contact-item-text">
-            <label class="input-label" style="margin-bottom: 0.2rem;">
-              <span class="lang-en">Email</span><span class="lang-zh">邮箱</span>
-            </label>
-            <span style="font-family: 'Inter', sans-serif; font-size: 1.05rem; font-weight: 500;">
-              <a href="mailto:dson3344@gmail.com" 
-                 onclick="navigator.clipboard.writeText('dson3344@gmail.com'); showCustomAlert('success', document.documentElement.lang === 'zh', 'Copied!', '邮箱地址已复制到剪贴板！', 'Email address copied to clipboard!');"
-                 style="color: inherit; text-decoration: none; transition: color 0.3s ease; cursor: pointer;" 
-                 onmouseover="this.style.color='var(--accent)'" 
-                 onmouseout="this.style.color='inherit'">dson3344@gmail.com</a>
-            </span>
-          </div>
-        </div>
-        
-        <div class="contact-item" style="display: flex; align-items: flex-start; gap: 1rem;">
-          <div class="contact-item-icon" style="color: var(--accent); font-size: 1.6rem;"><i class="bi bi-calendar-check"></i></div>
-          <div class="contact-item-text">
-            <label class="input-label" style="margin-bottom: 0.2rem;">
-              <span class="lang-en">Availability</span><span class="lang-zh">当前状态</span>
-            </label>
-            <span style="font-family: 'Inter', sans-serif; font-size: 1.05rem; font-weight: 500;">
-              <span class="lang-en">Open to Opportunities</span><span class="lang-zh">期待探索合作机会</span>
-            </span>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <div class="contact-right" data-aos="fade-left" data-aos-duration="1200" data-aos-delay="200">
-      <h2 style="font-family: 'Syne', sans-serif; margin-bottom: 1.2rem; font-size: 1.6rem; display: flex; align-items: center; gap: 0.6rem;">
-        <i class="bi bi-chat-square-dots" style="color: var(--accent); font-size: 1.4rem;"></i>
-        <span class="lang-en">Send a Message</span><span class="lang-zh">在线留言</span>
-      </h2>
-      
-      <form id="contactForm">
-        <div style="margin-bottom: 1rem;">
-          <label class="input-label"><span class="lang-en">Nickname</span><span class="lang-zh">您的昵称</span> <span style="color: var(--accent);">*</span></label>
-          <input type="text" name="nickname" required class="custom-input" placeholder="How should I call you?">
-        </div>
-
-        <div style="display: flex; gap: 1rem; margin-bottom: 1rem; flex-wrap: wrap;">
-            <div style="flex: 1 1 100px;">
-              <label class="input-label"><span class="lang-en">Age</span><span class="lang-zh">年龄</span></label>
-              <input type="number" name="age" min="0" max="120" class="custom-input" placeholder="E.g. 23">
-            </div>
-            <div style="flex: 2 1 150px;">
-              <label class="input-label"><span class="lang-en">Gender</span><span class="lang-zh">性别</span></label>
-              <select name="gender" class="custom-input">
-                <option value="" disabled selected>Select...</option>
-                <option value="male">Male / 男</option>
-                <option value="female">Female / 女</option>
-                <option value="other">Other / 其他</option>
-              </select>
-            </div>
-        </div>
-
-        <div style="margin-bottom: 1rem;">
-          <label class="input-label"><span class="lang-en">Email Address</span><span class="lang-zh">电子邮箱</span> <span style="color: var(--accent);">*</span></label>
-          <input type="email" name="email" required class="custom-input" placeholder="hello@creative.com">
-        </div>
-
-        <div style="margin-bottom: 1.2rem;">
-          <label class="input-label"><span class="lang-en">Project Details</span><span class="lang-zh">留言内容</span> <span style="color: var(--accent);">*</span></label>
-          <textarea name="message" rows="3" required class="custom-input" style="resize: vertical;" placeholder="Tell me about your amazing project..."></textarea>
-        </div>
-
-        <button type="submit" class="submit-btn" id="submitBtn">
-          <span class="lang-en">Send Message</span><span class="lang-zh">发送留言</span>
-        </button>
-      </form>
-    </div>
+<main class="contact">
+  <div class="contact-top">
+    <span class="label"><span class="lang-en">Contact</span><span class="lang-zh">联系</span></span>
+    <p class="contact-lede">
+      <span class="lang-en">For freelance projects and collaborations in video, UI/UX and 3D. Fill in the sentence below and tell me what you are making and when you need it.</span>
+      <span class="lang-zh">视频、UI/UX 与 3D 方向的自由接案与合作。把下面的句子补完，告诉我你在做什么、什么时候需要。</span>
+    </p>
   </div>
+
+  <h1 class="sr-only"><span class="lang-en">Get in touch</span><span class="lang-zh">联系我</span></h1>
+
+  <form id="contactForm">
+    <div class="ask">
+      <span class="lang-en">Hi DSON, my name is</span><span class="lang-zh">你好 DSON，我叫</span>
+      <input id="f-name" type="text" name="nickname" required class="ask-input" placeholder="your name" autocomplete="name" aria-label="Your name">
+      <span class="lang-en">and you can reach me at</span><span class="lang-zh">，邮箱是</span>
+      <input id="f-email" type="email" name="email" required class="ask-input wide" placeholder="you@example.com" autocomplete="email" aria-label="Your email">
+      <span class="lang-en">.</span><span class="lang-zh">。</span>
+    </div>
+
+    <div class="ask-message">
+      <label class="label" for="f-message"><span class="lang-en">I would like to talk about<span class="req"> *</span></span><span class="lang-zh">我想聊聊<span class="req"> *</span></span></label>
+      <textarea id="f-message" name="message" rows="4" required placeholder="What are you making, and when do you need it?"></textarea>
+    </div>
+
+    <button type="submit" class="submit-btn" id="submitBtn">
+      <span class="lang-en">Send message</span><span class="lang-zh">发送留言</span>
+    </button>
+  </form>
+
+  <ul class="contact-list">
+    <li>
+      <span class="label"><span class="lang-en">Location</span><span class="lang-zh">位置</span></span>
+      <span class="contact-value">Johor / Kuala Lumpur, Malaysia</span>
+    </li>
+    <li>
+      <span class="label"><span class="lang-en">Email</span><span class="lang-zh">邮箱</span></span>
+      <span class="contact-value">
+        <a href="mailto:dson3344@gmail.com"
+           onclick="navigator.clipboard.writeText('dson3344@gmail.com'); showCustomAlert('success', document.documentElement.lang === 'zh', 'Copied', '邮箱地址已复制。', 'Email address copied.');">dson3344@gmail.com</a>
+      </span>
+    </li>
+    <li>
+      <span class="label"><span class="lang-en">Availability</span><span class="lang-zh">当前状态</span></span>
+      <span class="contact-value">
+        <span class="lang-en">Open to freelance projects and collaborations</span><span class="lang-zh">接受自由项目与合作</span>
+      </span>
+    </li>
+  </ul>
 </main>
 
-<footer data-aos="fade-up" data-aos-offset="0">
-  <div class="logo" style="color: var(--accent); font-weight: bold; font-family: 'Syne', sans-serif;">DSON</div>
+<footer>
+  <span class="logo">DSON</span>
   <p><span class="lang-en">© 2025-2026 DSON. All rights reserved.</span><span class="lang-zh">© 2025-2026 DSON. 保留所有权利。</span></p>
 </footer>
 
@@ -340,36 +135,8 @@
 
 <script src="DSON.js" defer></script>
 <script src="translate.js" defer></script>
-<script src="https://unpkg.com/aos@2.3.1/dist/aos.js"></script>
+<script src="site.js" defer></script>
 <script>
-  AOS.init({
-    duration: 1000,
-    easing: 'ease-out-cubic',
-    once: true,
-    offset: 50
-  });
-
-  // Mobile Hamburger Menu Logic
-  document.addEventListener('DOMContentLoaded', () => {
-    const mobileMenuBtn = document.getElementById('mobile-menu');
-    const mainNav = document.getElementById('main-nav');
-    
-    if (mobileMenuBtn && mainNav) {
-      mobileMenuBtn.addEventListener('click', () => {
-        mainNav.classList.toggle('nav-active');
-        const icon = mobileMenuBtn.querySelector('i');
-        
-        if (mainNav.classList.contains('nav-active')) {
-          icon.classList.remove('bi-list');
-          icon.classList.add('bi-x-lg');
-        } else {
-          icon.classList.remove('bi-x-lg');
-          icon.classList.add('bi-list'); 
-        }
-      });
-    }
-  });
-
   // ✨ Custom Alert Controller Function ✨
   function showCustomAlert(type, isChinese, titleOverride, msgZh, msgEn) {
     const overlay = document.getElementById('custom-alert');
@@ -380,13 +147,13 @@
     if (type === 'success') {
       icon.innerHTML = '<i class="bi bi-check-circle-fill"></i>';
       icon.className = 'alert-icon success';
-      title.innerText = titleOverride ? titleOverride : (isChinese ? '发送成功' : 'Success');
-      message.innerText = msgZh ? (isChinese ? msgZh : msgEn) : (isChinese ? '您的留言已成功发送！我会尽快回复您。' : 'Your message has been sent successfully! I will get back to you soon.');
+      title.innerText = titleOverride ? titleOverride : (isChinese ? '已发送' : 'Message sent');
+      message.innerText = msgZh ? (isChinese ? msgZh : msgEn) : (isChinese ? '已收到你的留言，我会尽快回复。' : 'Thank you. I will reply as soon as I can.');
     } else {
       icon.innerHTML = '<i class="bi bi-x-circle-fill"></i>';
       icon.className = 'alert-icon error';
-      title.innerText = titleOverride ? titleOverride : (isChinese ? '发送失败' : 'Error');
-      message.innerText = msgZh ? (isChinese ? msgZh : msgEn) : (isChinese ? '抱歉，发送过程中出现了问题。请稍后再试。' : 'Oops! Something went wrong. Please try again later.');
+      title.innerText = titleOverride ? titleOverride : (isChinese ? '未能发送' : 'Not sent');
+      message.innerText = msgZh ? (isChinese ? msgZh : msgEn) : (isChinese ? '留言未能发送。请稍后再试，或直接发邮件到 dson3344@gmail.com。' : 'The message could not be sent. Please try again, or write to dson3344@gmail.com.');
     }
 
     overlay.classList.add('show');
@@ -413,8 +180,6 @@
 
     emailjs.send("service_dson3344", "template_dson0404", {
       name: formData.get("nickname"), 
-      gender: formData.get("gender"),
-      age: formData.get("age"),
       email: formData.get("email"),
       message: formData.get("message"),
     })
