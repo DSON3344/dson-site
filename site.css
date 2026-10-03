@@ -581,7 +581,8 @@ footer a:hover { color: var(--accent); }
    card scales with its column: 1em = card width / 22. ---- */
 .card-grid {
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    /* 3 columns: the 9 platform cards form a clean 3 x 3 (4 columns left a lone 9th card) */
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: clamp(28px, 3.4vw, 56px) clamp(20px, 2.6vw, 44px);
     padding: 0 var(--gutter) clamp(64px, 8vw, 120px);
 }
@@ -802,7 +803,6 @@ footer a:hover { color: var(--accent); }
     border: 1px solid var(--border-strong);
     padding: 2.5rem 2.25rem 2.25rem;
     max-width: 90%; width: 440px;
-    text-align: center;
     transform: translateY(12px);
     transition: transform 0.4s var(--ease);
 }
@@ -1011,9 +1011,9 @@ html.js:not(.reveal-all) .card-persp[data-reveal].is-in { transform: none; }
 html.cursor-on, html.cursor-on * { cursor: none !important; }
 html.cursor-on input, html.cursor-on textarea, html.cursor-on select { cursor: text !important; }
 .cursor, .cursor-dot, .hit { --c: var(--accent); position: fixed; left: 0; top: 0; pointer-events: none; }
-.cursor, .cursor-dot { z-index: 100050; opacity: 0; } /* above every overlay/modal (highest is 100000), so it's never hidden behind one */
+.cursor, .cursor-dot { z-index: 400; opacity: 0; }
 .cursor { width: 30px; height: 30px; margin: -15px 0 0 -15px; transition: opacity 0.3s ease; }
-.cursor-dot { width: 5px; height: 5px; margin: -2.5px 0 0 -2.5px; background: var(--c); z-index: 100051; transition: opacity 0.25s ease, rotate 0.4s var(--ease), scale 0.4s var(--ease), background-color 0.3s ease; }
+.cursor-dot { width: 5px; height: 5px; margin: -2.5px 0 0 -2.5px; background: var(--c); z-index: 401; transition: opacity 0.25s ease, rotate 0.4s var(--ease), scale 0.4s var(--ease), background-color 0.3s ease; }
 .cursor.on, .cursor-dot.on { opacity: 1; }
 .cursor .frame-k { position: absolute; inset: 0; transition: rotate 0.45s var(--ease), scale 0.45s var(--ease); }
 .cursor .k { position: absolute; width: 8px; height: 8px; border: 0 solid var(--c); transition: border-color 0.3s ease; }
@@ -1042,7 +1042,7 @@ html.cursor-on input, html.cursor-on textarea, html.cursor-on select { cursor: t
 @keyframes recoil { 0% { scale: 1; } 22% { scale: 1.55; } 100% { scale: 1; } }
 @keyframes dotFlash { 0% { scale: 3.2; } 100% { scale: 1; } }
 /* click: hit marker — four diagonal ticks that burst outward and fade */
-.hit { z-index: 100052; width: 0; height: 0; animation: hitBurst 0.5s cubic-bezier(0.2, 0.8, 0.3, 1) both; }
+.hit { z-index: 402; width: 0; height: 0; animation: hitBurst 0.5s cubic-bezier(0.2, 0.8, 0.3, 1) both; }
 .hit i { position: absolute; left: -1px; top: 0; width: 2px; height: 9px; background: var(--white); box-shadow: 0 0 6px var(--c); transform-origin: 1px 0; }
 .hit i:nth-child(1) { transform: rotate(45deg) translateY(9px); }
 .hit i:nth-child(2) { transform: rotate(135deg) translateY(9px); }
@@ -1064,7 +1064,7 @@ html.cursor-on input, html.cursor-on textarea, html.cursor-on select { cursor: t
 }
 
 @media (max-width: 1000px) and (min-width: 900px) {
-    .card-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .card-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 
 /* ==========================================================================
