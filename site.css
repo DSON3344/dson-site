@@ -533,7 +533,23 @@ footer a:hover { color: var(--accent); }
 }
 .modal > div:not(.modal-close) > div:nth-child(2) {
     flex: 1 1 40% !important; max-height: 75vh !important; overflow-y: auto !important;
-    padding-right: 15px !important; display: flex !important; flex-direction: column !important; justify-content: center !important;
+    padding-right: 15px !important; display: flex !important; flex-direction: column !important;
+    /* Not justify-content:center — when the text is taller than the column,
+       centring pushes the top (category + title) out of reach of the scroll.
+       Auto margins centre short content and fall back to top-aligned when it overflows. */
+    justify-content: flex-start !important;
+}
+.modal > div:not(.modal-close) > div:nth-child(2) > :first-child { margin-top: auto !important; }
+.modal > div:not(.modal-close) > div:nth-child(2) > :last-child { margin-bottom: auto !important; }
+/* Shorter laptop screens: tighten the text column so title, description, tools,
+   year and the live-site button fit without scrolling where possible. */
+@media (min-width: 900px) and (max-height: 900px) {
+    .modal { max-height: calc(100vh - 4rem) !important; }
+    .modal > div:not(.modal-close) > div:nth-child(2) { max-height: calc(100vh - 10rem) !important; }
+    .modal > div:not(.modal-close) > div:nth-child(2) .project-title-h2 { font-size: 2rem !important; margin-bottom: 1rem !important; }
+    .modal > div:not(.modal-close) > div:nth-child(2) .project-desc-p { line-height: 1.7 !important; margin-bottom: 1.5rem !important; }
+    .modal > div:not(.modal-close) > div:nth-child(2) .project-meta-details { padding-top: 1.5rem !important; }
+    .modal > div:not(.modal-close) > div:nth-child(2) a[target="_blank"] { margin-top: 1.5rem !important; }
 }
 .modal > div:not(.modal-close) > div:nth-child(2)::-webkit-scrollbar { width: 4px; }
 .modal > div:not(.modal-close) > div:nth-child(2)::-webkit-scrollbar-thumb { background: var(--border-strong); }
