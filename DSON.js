@@ -20,6 +20,7 @@ let currentGallery = [];      // Array for active modal's images
 let currentGalleryIndex = 0;  // Index for active modal's slider
 
 const catLabels = {
+    'web': { en: 'Web Development', zh: '网页开发' },
     'uiux': { en: 'UI/UX', zh: 'UI/UX 设计' },
     'photo': { en: 'Photo Editing', zh: '照片后期' },
     'manipulation': { en: 'Image Manipulation', zh: '图像合成' },
@@ -32,6 +33,20 @@ const catLabels = {
 // (the home page "Selected work" links here). Same rule as selected-work.js.
 function workSlug(title) {
     return String(title || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+}
+
+// "Visit live site" button for works that are real, deployed websites.
+// Only http(s) URLs are rendered, so a typo can't become a javascript: link.
+function liveSiteButton(url) {
+    if (!url || !/^https?:\/\//i.test(url)) return '';
+    const safe = String(url).replace(/"/g, '&quot;');
+    return `
+        <a href="${safe}" target="_blank" rel="noopener"
+           style="display:inline-flex; align-self:flex-start; align-items:center; gap:10px; margin-top:2rem; padding:14px 22px; border:1px solid var(--accent); border-radius:10px; color:var(--accent); text-decoration:none; font-size:0.85rem; letter-spacing:0.08em; text-transform:uppercase; font-weight:600; transition:0.3s;"
+           onmouseover="this.style.background='rgba(0,210,255,0.1)'" onmouseout="this.style.background='transparent'">
+            <span class="lang-en">Visit live site</span><span class="lang-zh">访问网站</span>
+            <i class="bi bi-arrow-up-right"></i>
+        </a>`;
 }
 
 // If the page was opened as portfolio.html?work=<slug>, open that work's modal.
@@ -134,7 +149,7 @@ function renderPortfolioUI() {
 
     if (currentFilter === 'all') {
         // ✨ SMART HOME LOGIC: Get exactly the latest 1 project from each of the 6 core categories
-        const categories = ['video', 'uiux', 'manipulation', '3d', 'graphic', 'photo']; 
+        const categories = ['web', 'uiux', 'video', 'manipulation', '3d', 'graphic', 'photo'];
         categories.forEach(cat => {
             const latest = allWorksData.find(w => w.category === cat);
             if (latest) displayList.push(latest);
@@ -350,6 +365,7 @@ function openModal(key) {
                         <span style="font-family:'Inter'; font-weight:600; color:var(--white);">${d.year}</span>
                     </div>
                 </div>
+                ${liveSiteButton(d.live_url)}
             </div>
         </div>
     `;
