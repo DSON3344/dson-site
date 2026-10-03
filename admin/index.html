@@ -153,6 +153,33 @@
   }
   .row-actions button:hover { color: var(--accent); border-color: var(--accent); }
   .row-actions button.del:hover { color: #ff6b6b; border-color: #ff6b6b; }
+  /* Selected Work bookmark (home page "Selected work", max 4) */
+  .row-actions button.feat { position: relative; }
+  .row-actions button.feat.on { color: var(--accent); border-color: var(--accent); background: rgba(0,210,255,0.08); }
+  .row-actions button.feat .rank {
+    position: absolute; top: -7px; right: -7px; min-width: 16px; height: 16px; padding: 0 3px; border-radius: 8px;
+    background: var(--accent); color: #04121a; font-size: 0.6rem; font-weight: 700; line-height: 16px;
+  }
+  .featured-bar {
+    display: flex; align-items: center; flex-wrap: wrap; gap: 0.6rem; margin: 0 0 1rem;
+    padding: 0.75rem 0.9rem; border: 1px dashed var(--border); border-radius: 10px; font-size: 0.8rem;
+  }
+  .featured-bar .fb-label { color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.06em; font-size: 0.7rem; margin-right: 0.3rem; }
+  .featured-bar .fb-label b { color: var(--accent); font-weight: 600; }
+  .featured-bar .fb-empty { color: var(--text-muted); }
+  .fb-chip {
+    display: inline-flex; align-items: center; gap: 0.45rem; padding: 0.3rem 0.35rem 0.3rem 0.4rem;
+    border: 1px solid rgba(0,210,255,0.35); border-radius: 8px; background: rgba(0,210,255,0.06);
+  }
+  .fb-chip img { width: 34px; height: 24px; object-fit: cover; border-radius: 4px; background: #000; }
+  .fb-chip .n { color: var(--accent); font-weight: 700; font-size: 0.72rem; }
+  .fb-chip .t { max-width: 170px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .fb-chip button {
+    background: none; border: none; color: var(--text-muted); cursor: pointer; padding: 0 0.15rem; font-size: 0.8rem;
+  }
+  .fb-chip button:hover:not(:disabled) { color: var(--accent); }
+  .fb-chip button:disabled { opacity: 0.25; cursor: default; }
+  .fb-chip button.x:hover { color: #ff6b6b; }
 
   /* ---------- Pagination ---------- */
   .pagination-bar {
@@ -294,6 +321,8 @@
         <button class="btn-accent" id="saveAllBtn" style="background:#4ade80;"><i class="bi bi-cloud-arrow-up"></i> Save Changes</button>
       </div>
 
+      <div class="featured-bar" id="featuredBar"></div>
+
       <div style="overflow-x:auto;">
         <table class="works-table">
           <thead>
@@ -414,6 +443,27 @@
           <div class="gallery-grid" id="galleryGrid"></div>
           <input type="file" id="galleryFileInput" accept="image/*" style="display:none;">
           <button type="button" class="icon-btn" id="galleryUploadBtn" style="margin-top:0.6rem;"><i class="bi bi-images"></i> Add Gallery Image</button>
+        </div>
+
+        <div class="form-field full">
+          <label>Selected Work Cover <span style="opacity:.6;">(optional — only used if this work is bookmarked for the home page; falls back to the thumbnail)</span></label>
+          <div class="thumb-upload-box">
+            <img id="coverPreview" class="thumb-preview" src="" alt="">
+            <div>
+              <input type="file" id="coverFileInput" accept="image/*" style="display:none;">
+              <button type="button" class="icon-btn" id="coverUploadBtn"><i class="bi bi-upload"></i> Upload Cover</button>
+              <button type="button" class="icon-btn" id="coverClearBtn"><i class="bi bi-x-lg"></i> Use Thumbnail</button>
+              <div id="coverUploadStatus" style="font-size:0.72rem; color:var(--text-muted); margin-top:0.3rem;"></div>
+            </div>
+          </div>
+          <input type="hidden" id="f-featured_cover">
+        </div>
+        <div class="form-field">
+          <label>Cover Crop</label>
+          <select id="f-featured_focus">
+            <option value="">Center</option>
+            <option value="top">Top (keep the top of the image, e.g. UI screens)</option>
+          </select>
         </div>
       </div>
 
@@ -863,7 +913,76 @@ const catLabels = {
   manipulation: 'Image Manipulation', '3d': '3D Modeling', graphic: 'Graphic Design'
 };
 
+/* ---------- Selected Work (home page) ----------
+   A work is featured when it has a numeric `featured_rank` (1 = first on the
+   home page). Stored on the work object itself, so it's saved through the same
+   /api/portfolio POST as everything else — no backend change needed. */
+const MAX_FEATURED = 4;
+
+function featuredList() {
+  return worksData
+    .map((w, idx) => ({ w, idx }))
+    .filter(({ w }) => Number(w.featured_rank) > 0)
+    .sort((a, b) => Number(a.w.featured_rank) - Number(b.w.featured_rank));
+}
+
+// Re-number ranks 1..n in their current order (closes gaps after removals).
+function normalizeFeaturedRanks() {
+  featuredList().forEach(({ w }, i) => { w.featured_rank = i + 1; });
+}
+
+function toggleFeatured(idx) {
+  const w = worksData[idx];
+  if (!w) return;
+  if (Number(w.featured_rank) > 0) {
+    delete w.featured_rank;
+    normalizeFeaturedRanks();
+  } else {
+    const count = featuredList().length;
+    if (count >= MAX_FEATURED) {
+      showToast('Selected Work is full (' + MAX_FEATURED + '/' + MAX_FEATURED + '). Remove one first.', true);
+      return;
+    }
+    w.featured_rank = count + 1;
+  }
+  renderWorksTable();
+  setDirty(true);
+}
+
+function moveFeatured(idx, dir) {
+  const list = featuredList();
+  const pos = list.findIndex((item) => item.idx === idx);
+  const swapWith = pos + dir;
+  if (pos < 0 || swapWith < 0 || swapWith >= list.length) return;
+  const a = list[pos].w, b = list[swapWith].w;
+  const tmp = a.featured_rank; a.featured_rank = b.featured_rank; b.featured_rank = tmp;
+  renderWorksTable();
+  setDirty(true);
+}
+
+function renderFeaturedBar() {
+  const bar = document.getElementById('featuredBar');
+  if (!bar) return;
+  const list = featuredList();
+  const label = `<span class="fb-label"><i class="bi bi-bookmark-star"></i> Home · Selected Work <b>${list.length}/${MAX_FEATURED}</b></span>`;
+  if (!list.length) {
+    bar.innerHTML = label + '<span class="fb-empty">Nothing bookmarked — the home page shows its built-in picks. Click <i class="bi bi-bookmark"></i> on a work to feature it.</span>';
+    return;
+  }
+  bar.innerHTML = label + list.map(({ w, idx }, i) => `
+    <span class="fb-chip">
+      <span class="n">${i + 1}</span>
+      <img src="${escapeHtml(resolveAssetUrl(w.featured_cover || w.thumbnail))}" alt="">
+      <span class="t" title="${escapeHtml(w.title || '')}">${escapeHtml(w.title || '')}</span>
+      <button type="button" onclick="moveFeatured(${idx}, -1)" title="Move left" ${i === 0 ? 'disabled' : ''}><i class="bi bi-chevron-left"></i></button>
+      <button type="button" onclick="moveFeatured(${idx}, 1)" title="Move right" ${i === list.length - 1 ? 'disabled' : ''}><i class="bi bi-chevron-right"></i></button>
+      <button type="button" class="x" onclick="toggleFeatured(${idx})" title="Remove from Selected Work"><i class="bi bi-x-lg"></i></button>
+    </span>
+  `).join('');
+}
+
 function renderWorksTable() {
+  renderFeaturedBar();
   const tbody = document.getElementById('worksTableBody');
   const filterCat = document.getElementById('categoryFilter').value;
   const search = document.getElementById('searchInput').value.trim().toLowerCase();
@@ -893,6 +1012,10 @@ function renderWorksTable() {
       <td>${escapeHtml(w.client || '')}</td>
       <td>
         <div class="row-actions" style="justify-content:flex-end;">
+          <button class="feat${Number(w.featured_rank) > 0 ? ' on' : ''}" onclick="toggleFeatured(${idx})"
+                  title="${Number(w.featured_rank) > 0 ? 'Remove from home page Selected Work' : 'Add to home page Selected Work'}">
+            <i class="bi ${Number(w.featured_rank) > 0 ? 'bi-bookmark-fill' : 'bi-bookmark'}"></i>${Number(w.featured_rank) > 0 ? `<span class="rank">${Number(w.featured_rank)}</span>` : ''}
+          </button>
           <button onclick="editWork(${idx})" title="Edit"><i class="bi bi-pencil"></i></button>
           <button class="del" onclick="deleteWork(${idx})" title="Delete"><i class="bi bi-trash"></i></button>
         </div>
@@ -934,6 +1057,7 @@ if (nextPageBtnEl) nextPageBtnEl.addEventListener('click', () => { currentPage +
 function deleteWork(idx) {
   if (!confirm('Delete "' + (worksData[idx].title || 'this work') + '"? This can\'t be undone once you save.')) return;
   worksData.splice(idx, 1);
+  normalizeFeaturedRanks();
   renderWorksTable();
   setDirty(true);
 }
@@ -962,6 +1086,8 @@ function editWork(idx) {
   document.getElementById('f-figma_link').value = w.figma_link || '';
   document.getElementById('f-thumbnail').value = w.thumbnail || '';
   document.getElementById('thumbPreview').src = resolveAssetUrl(w.thumbnail);
+  setCoverField(w.featured_cover || '');
+  document.getElementById('f-featured_focus').value = w.featured_focus || '';
   currentGallery = Array.isArray(w.gallery) ? [...w.gallery] : [];
   renderGalleryGrid();
   openModal(true);
@@ -972,6 +1098,8 @@ document.getElementById('addWorkBtn').addEventListener('click', () => {
   document.getElementById('workForm').reset();
   document.getElementById('f-thumbnail').value = '';
   document.getElementById('thumbPreview').src = '';
+  setCoverField('');
+  document.getElementById('f-featured_focus').value = '';
   currentGallery = [];
   renderGalleryGrid();
   openModal(false);
@@ -1039,6 +1167,31 @@ document.getElementById('thumbFileInput').addEventListener('change', async (e) =
   e.target.value = '';
 });
 
+function setCoverField(url) {
+  document.getElementById('f-featured_cover').value = url || '';
+  const prev = document.getElementById('coverPreview');
+  prev.src = url ? resolveAssetUrl(url) : '';
+  prev.style.visibility = url ? 'visible' : 'hidden';
+  document.getElementById('coverUploadStatus').textContent = url ? '' : 'Using the thumbnail.';
+}
+
+document.getElementById('coverUploadBtn').addEventListener('click', () => document.getElementById('coverFileInput').click());
+document.getElementById('coverClearBtn').addEventListener('click', () => setCoverField(''));
+document.getElementById('coverFileInput').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const statusEl = document.getElementById('coverUploadStatus');
+  try {
+    const url = await uploadImage(file, statusEl);
+    setCoverField(url);
+    statusEl.textContent = 'Uploaded ✓';
+  } catch (err) {
+    statusEl.textContent = err.message;
+    showToast(err.message, true);
+  }
+  e.target.value = '';
+});
+
 document.getElementById('galleryUploadBtn').addEventListener('click', () => document.getElementById('galleryFileInput').click());
 document.getElementById('galleryFileInput').addEventListener('change', async (e) => {
   const file = e.target.files[0];
@@ -1077,6 +1230,16 @@ document.getElementById('workForm').addEventListener('submit', (e) => {
   if (youtubeId) work.youtube_id = youtubeId;
   if (figmaLink) work.figma_link = figmaLink;
   if (currentGallery.length) work.gallery = [...currentGallery];
+
+  const featuredCover = document.getElementById('f-featured_cover').value.trim();
+  const featuredFocus = document.getElementById('f-featured_focus').value;
+  if (featuredCover) work.featured_cover = featuredCover;
+  if (featuredFocus) work.featured_focus = featuredFocus;
+  // The form rebuilds the work from scratch, so carry the bookmark over —
+  // otherwise editing a featured work would silently un-feature it.
+  if (editingIndex !== null && Number(worksData[editingIndex].featured_rank) > 0) {
+    work.featured_rank = Number(worksData[editingIndex].featured_rank);
+  }
 
   if (editingIndex === null) {
     worksData.unshift(work); // newest-first, matches homepage "latest per category" logic
