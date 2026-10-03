@@ -35,6 +35,15 @@ function workSlug(title) {
     return String(title || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
 }
 
+// Images for the detail-view slideshow. A gallery with a single image used to
+// be ignored (the slideshow needs 2+), so that one image never showed up; now
+// it's paired with the thumbnail. Galleries with 2+ images are used as-is.
+function gallerySlides(d) {
+    const g = Array.isArray(d.gallery) ? d.gallery.filter(Boolean) : [];
+    if (g.length === 1 && d.thumbnail && g[0] !== d.thumbnail) return [d.thumbnail, g[0]];
+    return g;
+}
+
 // "Visit live site" button for works that are real, deployed websites.
 // Only http(s) URLs are rendered, so a typo can't become a javascript: link.
 function liveSiteButton(url) {
@@ -282,6 +291,8 @@ function openModal(key) {
 
     let mediaHTML = '';
     
+    const slides = gallerySlides(d);
+
     if (d.youtube_id) {
         mediaHTML = `
             <div style="width: 100%; display: flex; flex-direction: column; gap: 1rem; height:auto;">
@@ -307,8 +318,8 @@ function openModal(key) {
                         allowfullscreen>
                 </iframe>
             </div>`;
-    } else if (d.gallery && d.gallery.length > 1) {
-        currentGallery = d.gallery;
+    } else if (slides.length > 1) {
+        currentGallery = slides;
         currentGalleryIndex = 0;
         // HTML 中不再嵌入 onclick，全部由底部的事件监听器接管喵！
         mediaHTML = `
@@ -374,7 +385,7 @@ function openModal(key) {
     syncAllLanguage(); 
 
     // ✨✨✨ FIX 2: 精准识别“点击”与“滑动”，根治弹窗重叠 Bug喵！ ✨✨✨
-    if (d.gallery && d.gallery.length > 1) {
+    if (slides.length > 1) {
         const galleryImg = document.getElementById('modal-gallery-img');
         if (galleryImg) {
             let startX = 0;
