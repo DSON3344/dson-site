@@ -309,6 +309,7 @@
       <div class="toolbar">
         <select id="categoryFilter">
           <option value="all">All Categories</option>
+          <option value="web">Web Development</option>
           <option value="uiux">UI/UX</option>
           <option value="video">Video</option>
           <option value="photo">Photo Editing</option>
@@ -372,7 +373,8 @@
         <div class="form-field">
           <label>Category *</label>
           <select id="f-category" required>
-            <option value="uiux">UI/UX</option>
+            <option value="web">Web Development</option>
+            <option value="uiux" selected>UI/UX</option>
             <option value="video">Video</option>
             <option value="photo">Photo Editing</option>
             <option value="manipulation">Image Manipulation</option>
@@ -423,6 +425,10 @@
         <div class="form-field">
           <label>Figma Prototype Link <span style="opacity:.6;">(optional)</span></label>
           <input type="text" id="f-figma_link" placeholder="https://www.figma.com/proto/...">
+        </div>
+        <div class="form-field full">
+          <label>Live Site URL <span style="opacity:.6;">(optional — adds a "Visit live site" button to the work's detail view)</span></label>
+          <input type="url" id="f-live_url" placeholder="https://visionlogic-ai.dson.site">
         </div>
 
         <div class="form-field full">
@@ -909,7 +915,7 @@ async function loadWorks() {
 }
 
 const catLabels = {
-  uiux: 'UI/UX', video: 'Video', photo: 'Photo Editing',
+  web: 'Web Development', uiux: 'UI/UX', video: 'Video', photo: 'Photo Editing',
   manipulation: 'Image Manipulation', '3d': '3D Modeling', graphic: 'Graphic Design'
 };
 
@@ -1084,6 +1090,7 @@ function editWork(idx) {
   document.getElementById('f-client_zh').value = w.client_zh || '';
   document.getElementById('f-youtube_id').value = w.youtube_id || '';
   document.getElementById('f-figma_link').value = w.figma_link || '';
+  document.getElementById('f-live_url').value = w.live_url || '';
   document.getElementById('f-thumbnail').value = w.thumbnail || '';
   document.getElementById('thumbPreview').src = resolveAssetUrl(w.thumbnail);
   setCoverField(w.featured_cover || '');
@@ -1229,6 +1236,14 @@ document.getElementById('workForm').addEventListener('submit', (e) => {
   const figmaLink = document.getElementById('f-figma_link').value.trim();
   if (youtubeId) work.youtube_id = youtubeId;
   if (figmaLink) work.figma_link = figmaLink;
+  const liveUrl = document.getElementById('f-live_url').value.trim();
+  if (liveUrl) {
+    if (!/^https?:\/\//i.test(liveUrl)) {
+      showToast('Live Site URL must start with https:// (or http://).', true);
+      return;
+    }
+    work.live_url = liveUrl;
+  }
   if (currentGallery.length) work.gallery = [...currentGallery];
 
   const featuredCover = document.getElementById('f-featured_cover').value.trim();

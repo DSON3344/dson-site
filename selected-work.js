@@ -11,6 +11,7 @@
 
   var MAX = 4;
   var CATS = {
+    web: ['Web development', '网页开发'],
     uiux: ['UI/UX', 'UI/UX 设计'],
     video: ['Video', '视频制作'],
     photo: ['Photo editing', '照片后期'],
