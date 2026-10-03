@@ -19,6 +19,32 @@ let currentLimit = 6;         // Items limit for specific categories
 let currentGallery = [];      // Array for active modal's images
 let currentGalleryIndex = 0;  // Index for active modal's slider
 
+const catLabels = {
+    'uiux': { en: 'UI/UX', zh: 'UI/UX 设计' },
+    'photo': { en: 'Photo Editing', zh: '照片后期' },
+    'manipulation': { en: 'Image Manipulation', zh: '图像合成' },
+    'video': { en: 'Video Editing', zh: '视频制作' },
+    '3d': { en: '3D Modeling', zh: '3D 建模' },
+    'graphic': { en: 'Graphic Design', zh: '平面设计' }
+};
+
+// URL-safe key for a work, used by portfolio.html?work=<slug> deep links
+// (the home page "Selected work" links here). Same rule as selected-work.js.
+function workSlug(title) {
+    return String(title || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+}
+
+// If the page was opened as portfolio.html?work=<slug>, open that work's modal.
+function openDeepLinkedWork() {
+    const wanted = new URLSearchParams(window.location.search).get('work');
+    if (!wanted) return;
+    const work = allWorksData.find(w => workSlug(w.title) === wanted);
+    if (!work) return;
+    const key = 'deeplink';
+    modalData[key] = { ...work, labels: catLabels[work.category] || { en: work.category, zh: work.category } };
+    openModal(key);
+}
+
 // --- 1. System Initialization ---
 document.addEventListener('DOMContentLoaded', () => {
     const langLinks = document.querySelectorAll('.lang-switcher a');
@@ -85,6 +111,7 @@ async function loadCMSData() {
             console.log("CMS Data: Loaded successfully 🚀");
             allWorksData = data.works;
             renderPortfolioUI();
+            openDeepLinkedWork();
         }
     } catch (err) {
         console.warn("CMS Connection failed. Using placeholder or empty grid.", err);
@@ -100,17 +127,8 @@ function renderPortfolioUI() {
     const loadMoreContainer = document.getElementById('load-more-container');
     if (!grid) return;
 
-    grid.innerHTML = ''; 
+    grid.innerHTML = '';
     modalData = {}; // Clear previous session data
-
-    const catLabels = {
-        'uiux': { en: 'UI/UX', zh: 'UI/UX 设计' },
-        'photo': { en: 'Photo Editing', zh: '照片后期' },
-        'manipulation': { en: 'Image Manipulation', zh: '图像合成' },
-        'video': { en: 'Video Editing', zh: '视频制作' },
-        '3d': { en: '3D Modeling', zh: '3D 建模' },
-        'graphic': { en: 'Graphic Design', zh: '平面设计' }
-    };
 
     let displayList = [];
 
