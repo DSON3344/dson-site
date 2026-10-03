@@ -581,7 +581,8 @@ footer a:hover { color: var(--accent); }
    card scales with its column: 1em = card width / 22. ---- */
 .card-grid {
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    /* 3 columns: the 9 platform cards form a clean 3 x 3 (4 columns left a lone 9th card) */
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: clamp(28px, 3.4vw, 56px) clamp(20px, 2.6vw, 44px);
     padding: 0 var(--gutter) clamp(64px, 8vw, 120px);
 }
@@ -1063,7 +1064,7 @@ html.cursor-on input, html.cursor-on textarea, html.cursor-on select { cursor: t
 }
 
 @media (max-width: 1000px) and (min-width: 900px) {
-    .card-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .card-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 
 /* ==========================================================================
